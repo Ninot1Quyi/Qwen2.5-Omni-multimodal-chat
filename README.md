@@ -39,7 +39,7 @@
 
 1. 克隆项目代码：
 ```bash
-git clone https://github.com/yourusername/Qwen-Omni-multimodal-chat.git
+git clone https://github.com/Ninot1Quyi/Qwen-Omni-multimodal-chat.git
 cd Qwen-Omni-multimodal-chat
 ```
 
@@ -49,7 +49,7 @@ pip install -r requirements.txt
 ```
 
 3. 配置API密钥：
-在 `config.py` 中设置你的 Qwen-Omni API密钥：
+在 `key.json` 中设置你的 Qwen-Omni API密钥：
 ```python
 API_KEY = 'your-api-key-here'
 ```

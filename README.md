@@ -1,10 +1,10 @@
-# Qwen-Omni Real-time Voice Communication
+# Qwen2.5-Omni Real-time Voice Communication
 
-基于通义千问 Qwen-Omni 的实时语音对话系统，支持实时语音交互、动态语音活动检测和流式音频处理。
+基于通义千问 Qwen2.5-Omni 的实时语音对话系统，支持实时语音交互、动态语音活动检测和流式音频处理。
 
-A real-time voice conversation system based on Tongyi Qianwen Qwen-Omni, supporting real-time voice interaction, dynamic voice activity detection, and streaming audio processing.
+A real-time voice conversation system based on Qwen2.5-Omni, supporting real-time voice interaction, dynamic voice activity detection, and streaming audio processing.
 
-> **注意**：这是一个初步的演示版本，主要实现了基础的语音对话功能。我们计划逐步添加更多 Qwen-Omni 支持的多模态交互功能。最终构建一个`全模态`的交互程序。
+> **注意**：这是一个初步的演示版本，主要实现了基础的语音对话功能。我们计划逐步添加更多 Qwen2.5-Omni 支持的多模态交互功能。最终构建一个`全模态`的交互程序。
 
 ## 1 使用方法
 
@@ -22,8 +22,8 @@ python app.py
    - 再次点击按钮结束对话
    
 <p align="center">
-  <img src="https://github.com/Ninot1Quyi/Qwen-Omni-multimodal-chat/blob/main/assets/GUI-1.png" width="45%">
-  <img src="https://github.com/Ninot1Quyi/Qwen-Omni-multimodal-chat/blob/main/assets/GUI-2.png" width="45%">
+  <img src="https://github.com/Ninot1Quyi/Qwen2.5-Omni-multimodal-chat/blob/main/assets/GUI-1.png" width="45%">
+  <img src="https://github.com/Ninot1Quyi/Qwen2.5-Omni-multimodal-chat/blob/main/assets/GUI-2.png" width="45%">
 </p>
 
 
@@ -88,8 +88,8 @@ python app.py --console
 
 1. 克隆项目代码：
 ```bash
-git clone https://github.com/Ninot1Quyi/Qwen-Omni-multimodal-chat.git
-cd Qwen-Omni-multimodal-chat
+git clone https://github.com/Ninot1Quyi/Qwen2.5-Omni-multimodal-chat.git
+cd Qwen2.5-Omni-multimodal-chat
 ```
 
 2. 安装依赖：
@@ -98,7 +98,7 @@ pip install -r requirements.txt
 ```
 
 3. 配置API密钥：
-在 `key.json` 中设置你的 Qwen-Omni API密钥：
+在 `key.json` 中设置你的 Qwen2.5-Omni API密钥：
 ```python
 API_KEY = 'your-api-key-here'
 ```
@@ -117,7 +117,7 @@ API_KEY = 'your-api-key-here'
 ## 7 项目结构
 
 ```
-Qwen-Omni-multimodal-chat/
+Qwen2.5-Omni-multimodal-chat/
 ├── app.py                 # 主入口文件，支持GUI和命令行模式
 ├── webview_api.py         # pywebview API接口
 ├── voice_chat.py          # 语音聊天核心功能
@@ -164,6 +164,6 @@ MIT License
 
 ## 致谢
 
-- [Qwen-Omni](https://github.com/QwenLM/Qwen2.5-Omni) - 通义千问大语言模型 [相关文档](https://help.aliyun.com/zh/model-studio/user-guide/qwen-omni?spm=a2c4g.11186623.0.0.5aefb0a8nJc2z7#db6d0ff7c371y)
+- [Qwen2.5-Omni](https://github.com/QwenLM/Qwen2.5-Omni) - 通义千问大语言模型 [相关文档](https://help.aliyun.com/zh/model-studio/user-guide/qwen-omni?spm=a2c4g.11186623.0.0.5aefb0a8nJc2z7#db6d0ff7c371y)
 - [Silero VAD](https://github.com/snakers4/silero-vad) - 语音活动检测模型 
 - [pywebview](https://pywebview.flowrl.com/) - Python GUI框架

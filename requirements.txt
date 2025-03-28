@@ -7,3 +7,8 @@ torchaudio
 openai 
 PyQt5
 pywebview
+ffmpeg-python
+transformers
+pyglet
+pythonnet; sys_platform == 'win32'
+cefpython3==66.1; sys_platform == 'win32'

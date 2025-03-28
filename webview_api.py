@@ -4,21 +4,70 @@ import json
 import random
 import numpy as np
 import math
+import sys
+import platform
 from voice_chat import QwenVoiceChat
+
+# 创建一个Window包装类，用于安全地访问window对象
+class WindowWrapper:
+    def __init__(self, window=None):
+        self._window = window
+    
+    def set_window(self, window):
+        self._window = window
+    
+    def evaluate_js(self, js_code):
+        """安全地执行JavaScript代码"""
+        if self._window:
+            try:
+                return self._window.evaluate_js(js_code)
+            except Exception as e:
+                print(f"执行JavaScript失败: {e}")
+                return None
+        return None
+    
+    # 避免与Rectangle进行比较
+    def __eq__(self, other):
+        if hasattr(other, '__class__'):
+            class_name = str(other.__class__)
+            if 'Rectangle' in class_name:
+                return False
+        return self is other
+    
+    def __hash__(self):
+        return hash(id(self))
 
 class VoiceChatAPI:
     def __init__(self):
         self.voice_chat = None
         self.conversation_thread = None
         self.is_running = False
-        self.window = None
+        self.window_wrapper = WindowWrapper()  # 使用包装类
         self.status = "idle"
         self.volume_update_thread = None
-        self.stop_volume_updates = threading.Event()
+        # 修改以避免Rectangle.op_Equality兼容性问题
+        self._stop_volume_updates = False  # 使用布尔标志替代Event对象
+    
+    # 添加特殊方法以解决Windows平台的兼容性问题
+    def __eq__(self, other):
+        # 用于解决Windows下System.Drawing.Rectangle比较问题
+        if hasattr(other, '__class__'):
+            class_name = str(other.__class__)
+            # 检查是否与Rectangle类型比较
+            if 'Rectangle' in class_name:
+                return False
+            # 检查是否与Window类型比较
+            if 'Window' in class_name or 'webview.window' in class_name:
+                return False
+        return self is other
+    
+    def __hash__(self):
+        # 配合__eq__方法一起实现正确的哈希表行为
+        return hash(id(self))
     
     def set_window(self, window):
         """设置pywebview窗口对象"""
-        self.window = window
+        self.window_wrapper.set_window(window)
     
     def check_connection(self):
         """检查与后端的连接"""
@@ -32,7 +81,7 @@ class VoiceChatAPI:
         try:
             self.voice_chat = QwenVoiceChat()
             self.is_running = True
-            self.stop_volume_updates.clear()
+            self._stop_volume_updates = False  # 清除停止标志
             self.conversation_thread = threading.Thread(target=self.run_conversation)
             self.conversation_thread.daemon = True
             self.conversation_thread.start()
@@ -53,7 +102,7 @@ class VoiceChatAPI:
         
         try:
             self.is_running = False
-            self.stop_volume_updates.set()
+            self._stop_volume_updates = True  # 设置停止标志
             
             if self.voice_chat:
                 self.voice_chat.interrupt_event.set()
@@ -74,8 +123,7 @@ class VoiceChatAPI:
     def update_status(self, status):
         """更新UI状态"""
         self.status = status
-        if self.window:
-            self.window.evaluate_js(f'window.updateStatus("{status}")')
+        self.window_wrapper.evaluate_js(f'window.updateStatus("{status}")')
     
     def simulate_volume_data(self):
         """模拟音量数据并发送到前端
@@ -87,7 +135,7 @@ class VoiceChatAPI:
             phase_offset = 0
             time_counter = 0
             
-            while self.is_running and not self.stop_volume_updates.is_set():
+            while self.is_running and not self._stop_volume_updates:
                 if self.status == "idle":
                     time.sleep(0.1)
                     continue
@@ -134,9 +182,9 @@ class VoiceChatAPI:
                 time_counter += update_interval
                 
                 # 发送数据到前端
-                if self.window and volume_data:
+                if volume_data:
                     volume_json = json.dumps(volume_data)
-                    self.window.evaluate_js(f'window.updateVolumeData({volume_json})')
+                    self.window_wrapper.evaluate_js(f'window.updateVolumeData({volume_json})')
                 
                 time.sleep(update_interval)
         

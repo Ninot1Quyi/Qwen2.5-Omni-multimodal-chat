@@ -44,9 +44,9 @@ def run_server(headless=False):
     # 创建窗口配置
     window_settings = {
         'width': 400,
-        'height': 433,
+        'height': 550,
         'resizable': True,
-        'min_size': (400, 433),
+        'min_size': (400, 550),
         'background_color': '#FFFFFF',
         'title': 'Qwen-Omni 语音助手',
         'text_select': False,
@@ -86,7 +86,7 @@ def run_server(headless=False):
     api.set_window(window)
     
     # 启动窗口，应用平台特定配置
-    webview.start(debug=True, http_server=True, gui=gui_options)
+    webview.start(debug=False, http_server=True, gui=gui_options)
 
 def run_console():
     """运行命令行版本"""

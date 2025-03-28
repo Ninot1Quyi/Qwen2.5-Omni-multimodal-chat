@@ -1,0 +1,89 @@
+# -*- mode: python ; coding: utf-8 -*-
+
+import os
+import sys
+
+block_cipher = None
+
+# 添加所有必要的数据文件
+datas = []
+
+# 添加web目录及其内容
+datas.extend([
+    ('web/templates', 'web/templates'),
+    ('web/static', 'web/static'),
+])
+
+# 添加assets目录下的图标文件
+datas.extend([
+    ('assets/Qwen.ico', 'assets'),
+    ('assets/Qwen.png', 'assets'),
+])
+
+# 添加key.json配置文件
+if os.path.exists('key.json'):
+    datas.append(('key.json', '.'))
+
+# 基本的hidden imports
+hiddenimports = [
+    'pyaudio', 
+    'numpy', 
+    'webview', 
+    'threading', 
+    'json',
+    'platform',
+    'random',
+    'wave',
+    'io',
+    'base64',
+    'math',
+    'time',
+    'soundfile',
+    'pyglet',
+    'webview.platforms.winforms',
+    'webview.window',
+]
+
+a = Analysis(
+    ['app.py'],
+    pathex=[os.path.abspath('.')],
+    binaries=[],
+    datas=datas,
+    hiddenimports=hiddenimports,
+    hookspath=[],
+    hooksconfig={},
+    runtime_hooks=[],
+    excludes=[],
+    win_no_prefer_redirects=False,
+    win_private_assemblies=False,
+    cipher=block_cipher,
+    noarchive=False,
+)
+
+pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
+
+exe = EXE(
+    pyz,
+    a.scripts,
+    [],
+    exclude_binaries=True,
+    name='QwenOmniVoiceAssistant',
+    debug=False,
+    bootloader_ignore_signals=False,
+    strip=False,
+    upx=True,
+    console=False,
+    icon='assets/Qwen.ico',
+    version='file_version.txt',
+)
+
+coll = COLLECT(
+    exe,
+    a.binaries,
+    a.zipfiles,
+    a.datas,
+    strip=False,
+    upx=True,
+    upx_exclude=[],
+    name='QwenOmniVoiceAssistant',
+) 

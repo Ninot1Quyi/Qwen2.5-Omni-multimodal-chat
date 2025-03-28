@@ -243,7 +243,7 @@ class AudioRecorder:
                 base64_audio = wav_to_base64(wav_bytes)
                 
                 # 保存到文件
-                save_wav_file(temp_file, recording_data, self.p, CHANNELS, AUDIO_FORMAT, RATE)
+                # save_wav_file(temp_file, recording_data, self.p, CHANNELS, AUDIO_FORMAT, RATE)
                 
                 return base64_audio, temp_file
             else:

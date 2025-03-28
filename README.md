@@ -26,7 +26,6 @@ python app.py
   <img src="https://github.com/Ninot1Quyi/Qwen2.5-Omni-multimodal-chat/blob/main/assets/GUI-2.png" width="45%">
 </p>
 
-
 ### 命令行模式
 
 1. 使用命令行模式启动：
@@ -47,7 +46,6 @@ python app.py --console
 4. 交互功能：
    - 在AI回答过程中可以直接说话打断
    - 系统会平滑处理打断并开始新的对话
-
 
 ## 2 开发计划
 
@@ -78,7 +76,8 @@ python app.py --console
 
 ## 4 环境要求
 
-- Python 3.10 或更高版本
+- Python 3.10（开发环境）
+- [uv](https://github.com/astral-sh/uv) - 快速、现代的Python包管理器
 - PyAudio 及其依赖的音频库
 - PyTorch (用于语音活动检测)
 - pywebview (用于GUI界面)
@@ -86,21 +85,45 @@ python app.py --console
 
 ## 5 安装说明
 
-1. 克隆项目代码：
+1. 安装uv包管理器（如果尚未安装）：
+```bash
+# 使用pip安装
+pip install uv
+
+# 或在Windows上使用PowerShell（推荐）
+(Invoke-WebRequest -Uri https://github.com/astral-sh/uv/releases/latest/download/uv-installer.ps1 -UseBasicParsing).Content | python -
+
+# 验证安装
+uv --version
+```
+
+2. 克隆项目代码：
 ```bash
 git clone https://github.com/Ninot1Quyi/Qwen2.5-Omni-multimodal-chat.git
 cd Qwen2.5-Omni-multimodal-chat
 ```
 
-2. 安装依赖：
+3. 创建并激活虚拟环境：
 ```bash
-pip install -r requirements.txt
+# 创建Python 3.10虚拟环境
+uv venv --python=3.10
+
+# 激活虚拟环境（Windows）
+.venv\Scripts\activate
 ```
 
-3. 配置API密钥：
-在 `key.json` 中设置你的 Qwen2.5-Omni API密钥：
-```python
-API_KEY = 'your-api-key-here'
+4. 安装依赖：
+```bash
+# 使用uv安装requirements.txt中的依赖
+uv pip install -r requirements.txt
+```
+
+5. 配置API密钥：
+复制`key.json.example`为`key.json`，填入你的API密钥：
+```json
+{
+    "api_key": "your-api-key-here"
+}
 ```
 
 ## 6 配置说明
@@ -135,18 +158,40 @@ Qwen2.5-Omni-multimodal-chat/
 │           └── app.js     # 前端逻辑
 ```
 
-## 8 注意事项
+## 8 依赖管理
+
+使用uv管理项目依赖：
+
+```bash
+# 重建开发环境（使用requirements.txt）
+uv venv --python=3.10  # 创建Python 3.10虚拟环境
+.venv\Scripts\activate  # 激活环境
+uv pip install -r requirements.txt  # 安装依赖
+
+# 查看已安装的包
+uv pip list
+
+# 检查可更新的包
+uv pip list --outdated
+
+# 生成新的requirements.txt（如有依赖更新）
+uv pip freeze > requirements.txt
+```
+
+## 9 注意事项
 
 1. 确保系统有可用的麦克风设备
 2. 保持网络连接稳定以确保与API的通信
 3. 调整麦克风音量以获得最佳的语音识别效果
 4. 在嘈杂环境中可能需要调整音量阈值参数
+5. 使用uv管理依赖可以显著提升安装速度
+6. 建议在虚拟环境中进行开发和构建
 
-## 9 许可证
+## 10 许可证
 
 MIT License
 
-## 10 贡献指南
+## 11 贡献指南
 
 欢迎提交Issue和Pull Request来帮助改进项目。在提交代码前，请确保：
 
@@ -155,7 +200,7 @@ MIT License
 3. 更新相关的文档说明
 4. 测试代码功能正常
 
-## 11 联系方式
+## 12 联系方式
 
 如有问题或建议，请通过以下方式联系：
 

@@ -1,0 +1,8 @@
+pyaudio
+numpy
+soundfile
+speechrecognition
+torch
+torchaudio
+openai 
+PyQt5

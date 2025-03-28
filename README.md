@@ -2,6 +2,8 @@
 
 基于通义千问 Qwen-Omni 的实时语音对话系统，支持实时语音交互、动态语音活动检测和流式音频处理。
 
+A real-time voice conversation system based on Tongyi Qianwen Qwen-Omni, supporting real-time voice interaction, dynamic voice activity detection, and streaming audio processing.
+
 > **注意**：这是一个初步的演示版本，主要实现了基础的语音对话功能。我们计划逐步添加更多 Qwen-Omni 支持的多模态交互功能。最终构建一个`全模态`的交互程序。
 
 ## 开发计划

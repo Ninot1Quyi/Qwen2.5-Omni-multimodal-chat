@@ -42,6 +42,9 @@ class QwenVoiceChat:
         self.interrupt_speech_start_time = None
         self.speech_active_after_interrupt = False
         
+        # 状态变化回调
+        self.on_state_change = None
+        
         # 启动麦克风流
         print("正在初始化麦克风流以进行持续监听...")
         self.audio_recorder.start_mic_stream()
@@ -135,6 +138,10 @@ class QwenVoiceChat:
         self.is_ai_speaking = True
         self.record_after_interrupt = False
         
+        # 调用状态变化回调
+        if self.on_state_change:
+            self.on_state_change("speaking")
+        
         response_data = {
             "ai_text": "",
             "has_audio": False,
@@ -155,7 +162,7 @@ class QwenVoiceChat:
                     model="qwen-omni-turbo",
                     messages=self.messages,
                     modalities=["text", "audio"],
-                    audio={"voice": "Cherry", "format": "wav"},
+                    audio={"voice": "Chelsie", "format": "wav"},
                     stream=True,
                     stream_options={"include_usage": True},
                 )
@@ -221,7 +228,7 @@ class QwenVoiceChat:
                         if int(time.time()) % 2 == 0:
                             queue_size = self.audio_player.audio_queue.qsize()
                             buffer_empty = self.audio_player.buffer_empty.is_set()
-                            print(f"\n音频状态: 队列大小={queue_size}, 缓冲区空={buffer_empty}, 播放完成={self.audio_player.playback_finished.is_set()}")
+                            # print(f"\n音频状态: 队列大小={queue_size}, 缓冲区空={buffer_empty}, 播放完成={self.audio_player.playback_finished.is_set()}")
                         
                         self.audio_player.playback_finished.wait(0.1)
                     
@@ -299,6 +306,10 @@ class QwenVoiceChat:
             self.messages.append(assistant_message)
         
         self.print_conversation_history()
+        
+        # 调用状态变化回调
+        if self.on_state_change:
+            self.on_state_change("listening")
     
     def start_conversation(self):
         print("正在启动与Qwen-Omni的语音对话...")

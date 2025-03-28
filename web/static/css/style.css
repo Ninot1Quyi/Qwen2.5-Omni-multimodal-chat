@@ -1,0 +1,264 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+}
+
+:root {
+    --primary-color: #000000;
+    --secondary-color: #666666;
+    --background-color: #ffffff;
+    --border-color: #e6e6e6;
+    --text-color: #333333;
+    --button-text: #ffffff;
+    --listening-color: #999999;
+    --speaking-color: #999999;
+    --idle-color: #e0e0e0;
+}
+
+body {
+    background-color: var(--background-color);
+    color: var(--text-color);
+    height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 0;
+    margin: 0;
+}
+
+.container {
+    width: 100%;
+    max-width: 600px;
+    background-color: transparent;
+    display: flex;
+    flex-direction: column;
+    height: 400px;
+    justify-content: space-between;
+}
+
+.window-controls {
+    display: flex;
+    align-items: center;
+    padding: 12px 20px;
+    border-bottom: 1px solid var(--border-color);
+    background-color: #f5f5f7;
+    position: relative;
+}
+
+.control {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    margin-right: 8px;
+}
+
+.red {
+    background-color: #ff5f57;
+}
+
+.yellow {
+    background-color: #febc2e;
+}
+
+.green {
+    background-color: #28c840;
+}
+
+.window-title {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 14px;
+    font-weight: 500;
+    color: #333;
+}
+
+.main-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 10px 20px;
+    text-align: center;
+    position: relative;
+}
+
+/* 初始视图 */
+#idle-view, #active-view {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 10px 0;
+}
+
+.control-btn {
+    background-color: #222;
+    color: white;
+    border: none;
+    padding: 12px 32px;
+    border-radius: 24px;
+    font-size: 16px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.control-btn:hover {
+    background-color: #000;
+    transform: translateY(-1px);
+}
+
+.control-btn:active {
+    transform: translateY(1px);
+}
+
+.control-btn-circle {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background-color: white;
+    color: #333;
+    border: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    transition: all 0.2s ease;
+    position: absolute;
+    right: 30px;
+}
+
+.control-btn-circle:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    transform: translateY(-1px);
+}
+
+.secondary-btn {
+    background-color: #f5f5f7;
+    color: #333;
+    border: 1px solid #ddd;
+    padding: 10px 24px;
+    border-radius: 24px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    margin-top: 24px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.secondary-btn:hover {
+    background-color: #eee;
+}
+
+/* 波形可视化 */
+.wave-visualizer {
+    width: 100%;
+    position: relative;
+    padding: 0 50px;
+    max-width: 500px;
+    height: 70px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.audio-wave-container {
+    width: 100%;
+    height: 50px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background-color: #f5f5f7;
+    border-radius: 25px;
+    padding: 0 20px;
+    transition: box-shadow 0.3s ease, transform 0.3s ease;
+}
+
+/* 胶囊动态特效 */
+.audio-wave-container.listening {
+    box-shadow: 0 0 0 2px rgba(153, 153, 153, 0.3);
+    animation: pulse-border 1.8s infinite;
+}
+
+@keyframes pulse-border {
+    0% { box-shadow: 0 0 0 0px rgba(153, 153, 153, 0.3); }
+    50% { box-shadow: 0 0 0 4px rgba(153, 153, 153, 0.15); }
+    100% { box-shadow: 0 0 0 0px rgba(153, 153, 153, 0); }
+}
+
+.wave-bars {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1px;
+}
+
+.wave-bar {
+    width: 1px;
+    max-width: 1px;
+    flex: 0 0 1px;
+    height: 3px;
+    margin: 0;
+    background-color: var(--idle-color);
+    opacity: 0.5;
+    transition: height 0.15s ease, background-color 0.3s ease;
+}
+
+/* 待机状态 */
+.audio-wave-container.idle .wave-bar {
+    background-color: var(--idle-color);
+    opacity: 0.4;
+}
+
+/* 监听状态 */
+.audio-wave-container.listening .wave-bar {
+    background-color: var(--listening-color);
+    opacity: 0.6;
+}
+
+/* 说话状态 */
+.audio-wave-container.speaking .wave-bar {
+    background-color: var(--speaking-color);
+    opacity: 0.6;
+}
+
+.footer-text {
+    padding: 10px 20px;
+    font-size: 14px;
+    color: #666;
+    line-height: 1.4;
+    margin: 0;
+}
+
+.footer {
+    padding: 8px 20px;
+    border-top: 1px solid var(--border-color);
+    font-size: 12px;
+    color: #999;
+    background-color: #f5f5f7;
+}
+
+.status-info {
+    display: flex;
+    justify-content: space-between;
+}
+
+/* 动画 */
+@keyframes pulse {
+    0% { opacity: 0.3; }
+    50% { opacity: 0.8; }
+    100% { opacity: 0.3; }
+} 

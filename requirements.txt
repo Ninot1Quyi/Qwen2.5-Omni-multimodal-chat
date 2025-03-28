@@ -6,3 +6,4 @@ torch
 torchaudio
 openai 
 PyQt5
+pywebview

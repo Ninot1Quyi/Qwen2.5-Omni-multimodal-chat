@@ -12,7 +12,9 @@ A real-time voice conversation system based on Tongyi Qianwen Qwen-Omni, support
 - [x] 音频通话功能
   - [x] 交互式音频对话
   - [x] 打断式音频通话
-- [ ] GUI界面
+- [x] GUI界面
+  - [x] 类Siri球形动态UI
+  - [x] 可视化对话状态
 - [ ] 视频通话功能
   - [ ] 实时视频流处理
   - [ ] 视觉内容理解和分析
@@ -29,12 +31,14 @@ A real-time voice conversation system based on Tongyi Qianwen Qwen-Omni, support
 - 流式音频处理：支持音频数据的流式处理和播放
 - 平滑打断机制：允许用户在AI回答过程中自然打断
 - 音频淡出效果：在对话结束或打断时提供平滑的音频过渡
+- 现代化GUI界面：提供类似Siri的动态视觉反馈
 
 ## 环境要求
 
 - Python 3.10 或更高版本
 - PyAudio 及其依赖的音频库
 - PyTorch (用于语音活动检测)
+- pywebview (用于GUI界面)
 - 麦克风和音频输出设备
 
 ## 安装说明
@@ -58,9 +62,28 @@ API_KEY = 'your-api-key-here'
 
 ## 使用方法
 
-1. 启动程序：
+### GUI模式
+
+1. 启动GUI界面：
 ```bash
-python main.py
+python app.py
+```
+
+2. 在打开的窗口中：
+   - 点击"开始对话"按钮启动语音对话
+   - 当球体显示红色脉动效果时，说出你的问题
+   - 当球体显示绿色动画时，表示AI正在回答
+   - 再次点击按钮结束对话
+   
+   <img src="/Users/quyi/PycharmProjects/Qwen-Omni multimodal chat/assets/QQ_1743169262124.png" alt="QQ_1743169262124" style="zoom:50%;" />
+   
+   <img src="/Users/quyi/PycharmProjects/Qwen-Omni multimodal chat/assets/QQ_1743169309114.png" alt="QQ_1743169309114" style="zoom:50%;" />
+
+### 命令行模式
+
+1. 使用命令行模式启动：
+```bash
+python app.py --console
 ```
 
 2. 选择录音模式：
@@ -87,6 +110,27 @@ python main.py
 - `SPEECH_VOLUME_THRESHOLD`：语音音量阈值
 - `MIN_POSITIVE_FRAMES`：语音检测的最小正帧数
 - `MIN_NEGATIVE_FRAMES`：静音检测的最小负帧数
+
+## 项目结构
+
+```
+Qwen-Omni-multimodal-chat/
+├── app.py                 # 主入口文件，支持GUI和命令行模式
+├── webview_api.py         # pywebview API接口
+├── voice_chat.py          # 语音聊天核心功能
+├── audio_player.py        # 音频播放组件
+├── audio_recorder.py      # 音频录制组件
+├── config.py              # 配置文件
+├── requirements.txt       # 依赖库列表
+├── web/                   # GUI前端文件
+│   ├── templates/         # HTML模板
+│   │   └── index.html     # 主界面HTML
+│   └── static/            # 静态资源
+│       ├── css/           # 样式文件
+│       │   └── style.css  # 主样式表
+│       └── js/            # JavaScript文件
+│           └── app.js     # 前端逻辑
+```
 
 ## 注意事项
 
@@ -119,3 +163,4 @@ MIT License
 
 - [Qwen-Omni](https://github.com/QwenLM/Qwen2.5-Omni) - 通义千问大语言模型 [相关文档](https://help.aliyun.com/zh/model-studio/user-guide/qwen-omni?spm=a2c4g.11186623.0.0.5aefb0a8nJc2z7#db6d0ff7c371y)
 - [Silero VAD](https://github.com/snakers4/silero-vad) - 语音活动检测模型 
+- [pywebview](https://pywebview.flowrl.com/) - Python GUI框架

@@ -75,9 +75,9 @@ python app.py
    - 当球体显示绿色动画时，表示AI正在回答
    - 再次点击按钮结束对话
    
-   <img src="/Users/quyi/PycharmProjects/Qwen-Omni multimodal chat/assets/QQ_1743169262124.png" alt="QQ_1743169262124" style="zoom:50%;" />
+   <img src="https://github.com/Ninot1Quyi/Qwen-Omni-multimodal-chat/blob/main/assets/GUI-1.png" alt="QQ_1743169262124" style="zoom:50%;" />
    
-   <img src="/Users/quyi/PycharmProjects/Qwen-Omni multimodal chat/assets/QQ_1743169309114.png" alt="QQ_1743169309114" style="zoom:50%;" />
+   <img src="https://github.com/Ninot1Quyi/Qwen-Omni-multimodal-chat/blob/main/assets/GUI-1.png" alt="QQ_1743169309114" style="zoom:50%;" />
 
 ### 命令行模式
 

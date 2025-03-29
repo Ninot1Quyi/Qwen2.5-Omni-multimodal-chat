@@ -80,7 +80,7 @@ python app.py --console
 
 - Python 3.10（开发环境）
 - PyAudio 及其依赖的音频库
-- onnxruntime - 用于语音活动检测 (替代PyTorch，更轻量)
+- onnxruntime - 用于语音活动检测
 - pywebview (用于GUI界面)
 - 麦克风和音频输出设备
 - 推荐：[uv](https://github.com/astral-sh/uv) - 快速、现代的Python包管理器
@@ -89,9 +89,11 @@ python app.py --console
 
 ### 5.1 方法一：直接下载可执行文件（推荐）
 
-访问[Releases页面](https://github.com/Ninot1Quyi/Qwen2.5-Omni-multimodal-chat/releases)下载最新的Windows可执行文件。下载后解压，双击"QwenOmniVoiceAssistant.exe"即可运行。
+访问[Releases页面](https://github.com/Ninot1Quyi/Qwen2.5-Omni-multimodal-chat/releases)下载最新的Windows可执行文件。
 
-### 5.2 方法二：从源码运行
+下载后解压，双击"QwenOmniVoiceAssistant.exe"即可运行。
+
+### 5.2 方法二：从源码构建
 
 #### 安装步骤
 
@@ -147,7 +149,7 @@ python app.py --console
 .\build-scripts\windows\build.bat
 ```
 
-**或双击启动打包脚本`build.bat`，打包文件在`dist`文件夹下**
+**或双击启动打包脚本`build.bat`，打包文件存放=在`dist`文件夹下**
 
 ### 5.3 常见问题
 

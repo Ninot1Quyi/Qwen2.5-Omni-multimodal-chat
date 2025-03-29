@@ -13,6 +13,7 @@ A real-time voice conversation system based on Qwen2.5-Omni, supporting real-tim
 1. 启动GUI界面：
 ```bash
 python app.py
+#uv run python app.py
 ```
 
 2. 在打开的窗口中：
@@ -31,18 +32,14 @@ python app.py
 1. 使用命令行模式启动：
 ```bash
 python app.py --console
+#uv run python app.py --console
 ```
 
 2. 选择录音模式：
    - 动态模式：根据语音活动自动控制录音开始和结束
-   - 固定时长模式：录制指定时长的音频
-
 3. 开始对话：
-   - 等待提示后开始说话
-   - 系统会自动检测语音并进行录音
-   - 停止说话后系统会自动结束录音
+   - 点击“开始”即可语音交流
    - AI助手会通过语音回答你的问题
-
 4. 交互功能：
    - 在AI回答过程中可以直接说话打断
    - 系统会平滑处理打断并开始新的对话
@@ -54,7 +51,7 @@ python app.py --console
   - [x] 交互式音频对话
   - [x] 打断式音频通话
 - [x] GUI界面
-  - [x] 类Siri球形动态UI
+  - [x] 音频交互动态UI
   - [x] 可视化对话状态
 - [ ] 视频通话功能
   - [ ] 实时视频流处理
@@ -67,63 +64,96 @@ python app.py --console
 ## 3 功能特点
 
 - 实时语音交互：支持用户与AI助手进行实时语音对话
-- 智能语音检测：使用 Silero VAD 进行高精度的语音活动检测
+- 智能语音检测：使用 Silero VAD (ONNX版本) 进行高精度的语音活动检测，无需PyTorch依赖
 - 动态录音控制：根据用户说话情况自动开始和结束录音
 - 流式音频处理：支持音频数据的流式处理和播放
 - 平滑打断机制：允许用户在AI回答过程中自然打断
 - 音频淡出效果：在对话结束或打断时提供平滑的音频过渡
-- 现代化GUI界面：提供类似Siri的动态视觉反馈
+- 现代化GUI界面：动态视觉反馈
 
 ## 4 环境要求
 
 - Python 3.10（开发环境）
 - [uv](https://github.com/astral-sh/uv) - 快速、现代的Python包管理器
 - PyAudio 及其依赖的音频库
-- PyTorch (用于语音活动检测)
+- onnxruntime - 用于语音活动检测 (替代PyTorch，更轻量)
 - pywebview (用于GUI界面)
 - 麦克风和音频输出设备
 
 ## 5 安装说明
 
-1. 安装uv包管理器（如果尚未安装）：
+### 5.1 方法一：直接下载可执行文件（推荐）
+
+访问[Releases页面](https://github.com/Ninot1Quyi/Qwen2.5-Omni-multimodal-chat/releases)下载最新的Windows可执行文件。下载后解压，双击"QwenOmniVoiceAssistant.exe"即可运行。
+
+### 5.2 方法二：从源码运行
+
+#### 安装步骤
+
+1. **创建Python环境**：
+
 ```bash
-# 使用pip安装
-pip install uv
+# 安装Python 3.10（如已安装请跳过）
+# https://www.python.org/downloads/release/python-31011/
 
-# 或在Windows上使用PowerShell（推荐）
-(Invoke-WebRequest -Uri https://github.com/astral-sh/uv/releases/latest/download/uv-installer.ps1 -UseBasicParsing).Content | python -
-
-# 验证安装
-uv --version
-```
-
-2. 克隆项目代码：
-```bash
+# 克隆项目代码
 git clone https://github.com/Ninot1Quyi/Qwen2.5-Omni-multimodal-chat.git
 cd Qwen2.5-Omni-multimodal-chat
+
+# 创建虚拟环境并激活
+python -m venv .venv
+# Windows
+.venv\Scripts\activate  
+# Linux/macOS
+# source .venv/bin/activate
 ```
 
-3. 创建并激活虚拟环境：
+2. **安装依赖**：
+
 ```bash
-# 创建Python 3.10虚拟环境
-uv venv --python=3.10
-
-# 激活虚拟环境（Windows）
-.venv\Scripts\activate
+# 安装项目依赖
+pip install -r requirements.txt
 ```
 
-4. 安装依赖：
-```bash
-# 使用uv安装requirements.txt中的依赖
-uv pip install -r requirements.txt
-```
+3. **配置API密钥**：
 
-5. 配置API密钥：
-复制`key.json.example`为`key.json`，填入你的API密钥：
+复制`key.json.example`为`key.json`，填入你的通义千问API密钥：
 ```json
 {
-    "api_key": "your-api-key-here"
+    "api_key": "your-api-key-here",
+    "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1"
 }
+```
+
+4. **运行应用**：
+
+```bash
+# 启动图形界面版本
+python app.py
+
+# 或启动命令行版本
+python app.py --console
+```
+
+### 5.3 常见问题
+
+- **麦克风未检测到**：请检查系统麦克风权限设置，确保应用有权限访问麦克风
+- **运行时缺少依赖**：确保已正确安装所有依赖，如遇问题可尝试`pip install -r requirements.txt --upgrade`
+- **API密钥无效**：确保已在key.json中填入正确的通义千问API密钥
+
+### 5.4 高级用户说明
+
+如需使用更高级的包管理工具如uv，可以参考以下步骤：
+
+```bash
+# 安装uv包管理器
+pip install uv
+
+# 使用uv创建环境
+uv venv --python=3.10
+
+# 使用uv安装依赖
+uv pip install -r requirements.txt
 ```
 
 ## 6 配置说明
@@ -148,6 +178,8 @@ Qwen2.5-Omni-multimodal-chat/
 ├── audio_recorder.py      # 音频录制组件
 ├── config.py              # 配置文件
 ├── requirements.txt       # 依赖库列表
+├── models/                # 模型目录
+│   └── silero_vad.onnx    # VAD ONNX模型
 ├── web/                   # GUI前端文件
 │   ├── templates/         # HTML模板
 │   │   └── index.html     # 主界面HTML
@@ -187,11 +219,11 @@ uv pip freeze > requirements.txt
 5. 使用uv管理依赖可以显著提升安装速度
 6. 建议在虚拟环境中进行开发和构建
 
-## 10 许可证
+## 11 许可证
 
 MIT License
 
-## 11 贡献指南
+## 12 贡献指南
 
 欢迎提交Issue和Pull Request来帮助改进项目。在提交代码前，请确保：
 
@@ -200,7 +232,7 @@ MIT License
 3. 更新相关的文档说明
 4. 测试代码功能正常
 
-## 12 联系方式
+## 13 联系方式
 
 如有问题或建议，请通过以下方式联系：
 

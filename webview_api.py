@@ -39,11 +39,23 @@ class WindowWrapper:
 
 class VoiceChatAPI:
     def __init__(self):
-        self.voice_chat = None
-        self.conversation_thread = None
+        # 初始化应用状态
+        self.window = None
         self.is_running = False
+        self.voice_chat = None
+        self.debug_mode = False
+        
+        # 语音聊天配置默认值
+        self.voice_chat_config = {
+            'recording_mode': 'dynamic',  # 默认使用动态录音模式
+            'recording_seconds': 5,       # 默认录音时长（固定模式下使用）
+        }
+        
+        # 状态监测与控制
+        self.status = "idle"  # 当前状态：idle, listening, speaking
+        self.simulation_thread = None  # 音量波形模拟线程
+        self.conversation_thread = None  # 会话线程
         self.window_wrapper = WindowWrapper()  # 使用包装类
-        self.status = "idle"
         self.volume_update_thread = None
         # 修改以避免Rectangle.op_Equality兼容性问题
         self._stop_volume_updates = False  # 使用布尔标志替代Event对象
@@ -69,6 +81,21 @@ class VoiceChatAPI:
         """设置pywebview窗口对象"""
         self.window_wrapper.set_window(window)
     
+    def configure_voice_chat(self, config):
+        """配置语音聊天参数"""
+        # 更新配置
+        for key, value in config.items():
+            if key in self.voice_chat_config:
+                self.voice_chat_config[key] = value
+                
+        # 如果语音聊天实例已存在，则更新其配置
+        if self.voice_chat:
+            # 更新配置
+            self.voice_chat.recording_mode = self.voice_chat_config['recording_mode']
+            self.voice_chat.recording_seconds = self.voice_chat_config['recording_seconds']
+            
+        return {"status": "success", "message": "语音聊天配置已更新"}
+    
     def check_connection(self):
         """检查与后端的连接"""
         return {'success': True, 'message': '连接成功'}
@@ -79,9 +106,18 @@ class VoiceChatAPI:
             return {'success': False, 'message': '会话已经在运行中'}
         
         try:
+            # 初始化语音聊天实例
             self.voice_chat = QwenVoiceChat()
+            
+            # 应用配置
+            self.voice_chat.recording_mode = self.voice_chat_config['recording_mode']
+            self.voice_chat.recording_seconds = self.voice_chat_config['recording_seconds']
+            
+            # 设置运行状态
             self.is_running = True
             self._stop_volume_updates = False  # 清除停止标志
+            
+            # 创建并启动会话线程
             self.conversation_thread = threading.Thread(target=self.run_conversation)
             self.conversation_thread.daemon = True
             self.conversation_thread.start()
@@ -101,23 +137,53 @@ class VoiceChatAPI:
             return {'success': False, 'message': '没有运行中的会话'}
         
         try:
+            print("正在停止语音对话...")
             self.is_running = False
             self._stop_volume_updates = True  # 设置停止标志
             
             if self.voice_chat:
+                # 设置所有停止标志
+                self.voice_chat.is_running = False
+                self.voice_chat.session_end_event.set()
                 self.voice_chat.interrupt_event.set()
+                
+                # 清除其他事件标志，避免线程被阻塞
+                self.voice_chat.speech_detected_event.set()
+                self.voice_chat.user_ready_event.set()
+                self.voice_chat.user_done_event.set()
+                
+                # 停止音频播放
+                if hasattr(self.voice_chat, 'audio_player') and self.voice_chat.audio_player:
+                    self.voice_chat.audio_player.stop_immediately()
+                
+                # 停止麦克风流
+                if hasattr(self.voice_chat, 'audio_recorder') and self.voice_chat.audio_recorder:
+                    self.voice_chat.audio_recorder.stop_mic_stream()
+                
+                # 等待一小段时间，让线程有机会响应
+                time.sleep(0.5)
+                
+                # 完全关闭语音聊天
                 self.voice_chat.close()
                 self.voice_chat = None
             
+            # 等待会话线程结束
             if self.conversation_thread and self.conversation_thread.is_alive():
                 self.conversation_thread.join(timeout=2.0)
+                print("会话线程已终止")
             
+            # 等待音量更新线程结束
             if self.volume_update_thread and self.volume_update_thread.is_alive():
                 self.volume_update_thread.join(timeout=1.0)
+                print("音量更新线程已终止")
             
+            # 更新UI状态
             self.update_status("idle")
+            print("语音对话已完全停止")
+            
             return {'success': True, 'message': '会话已结束'}
         except Exception as e:
+            print(f"停止语音对话时出错: {str(e)}")
             return {'success': False, 'message': f'停止失败: {str(e)}'}
     
     def update_status(self, status):
@@ -221,10 +287,6 @@ class VoiceChatAPI:
         if not self.voice_chat:
             return
         
-        # 设置语音聊天参数（简化配置，使用默认值）
-        self.voice_chat.recording_mode = "dynamic"
-        self.voice_chat.enable_speech_recognition = False
-        
         # 创建一个特殊的回调，用于更新UI状态
         def on_state_change(state):
             self.update_status(state)
@@ -233,30 +295,71 @@ class VoiceChatAPI:
         self.voice_chat.on_state_change = on_state_change
         
         try:
-            # 修改语音聊天的主循环
+            # 初始化会话启动
+            print("在GUI模式下启动会话，使用默认配置")
+            print(f"录音模式: {self.voice_chat.recording_mode}")
+            
+            # 不再添加欢迎消息，以避免AI自动打招呼
+            self.voice_chat.messages = []
+            
+            # 完全重置所有状态，就像CLI模式一样
+            self.voice_chat._reset_state()
+            self.voice_chat.current_session_id = 0
+            self.voice_chat.is_running = True
+            self.voice_chat.session_end_event.clear()
+            
+            # 确保麦克风流已启动
+            if not self.voice_chat.audio_recorder.is_mic_stream_active():
+                print("重新启动麦克风流...")
+                self.voice_chat.audio_recorder.start_mic_stream()
+            
+            # 创建并启动持续语音检测线程
+            if not hasattr(self.voice_chat, 'speech_detection_thread') or not self.voice_chat.speech_detection_thread or not self.voice_chat.speech_detection_thread.is_alive():
+                self.voice_chat.speech_detection_thread = threading.Thread(
+                    target=self.voice_chat._continuous_speech_detection
+                )
+                self.voice_chat.speech_detection_thread.daemon = True
+                self.voice_chat.speech_detection_thread.start()
+                print("持续语音检测线程已启动")
+            
+            # 创建并启动AI响应线程
+            ai_thread = threading.Thread(target=self.voice_chat._ai_response_thread)
+            ai_thread.daemon = True
+            ai_thread.start()
+            
+            # 创建并启动用户输入线程
+            user_thread = threading.Thread(target=self.voice_chat._user_listening_thread)
+            user_thread.daemon = True
+            user_thread.start()
+            
+            # 更新初始状态
             self.update_status("listening")
             
-            while self.is_running:
-                # 等待用户输入
-                if self.voice_chat.is_ai_speaking:
-                    self.update_status("speaking")
-                    time.sleep(0.1)
-                    continue
-                
-                self.update_status("listening")
-                
-                # 开始录音
-                audio_base64, audio_file = self.voice_chat.audio_recorder.record_until_silence()
-                
-                if not audio_base64 or not self.is_running:
-                    continue
-                
-                # 处理音频输入
-                self.voice_chat.process_user_input(audio_base64, audio_file)
+            # 等待会话结束（与CLI模式类似）
+            while self.is_running and self.voice_chat.is_running and not self.voice_chat.session_end_event.is_set():
+                time.sleep(0.5)
+            
         except Exception as e:
-            print(f"对话线程出错: {e}")
+            print(f"GUI会话线程出错: {e}")
         finally:
-            self.is_running = False
-            if self.voice_chat:
-                self.voice_chat.close()
-            self.update_status("idle") 
+            # 确保资源被正确释放
+            if hasattr(self.voice_chat, 'is_running'):
+                self.voice_chat.is_running = False
+            
+            if hasattr(self.voice_chat, 'session_end_event'):
+                self.voice_chat.session_end_event.set()
+                
+            # 等待核心线程结束（与CLI模式类似）
+            try:
+                if hasattr(self.voice_chat, 'speech_detection_thread') and self.voice_chat.speech_detection_thread and self.voice_chat.speech_detection_thread.is_alive():
+                    self.voice_chat.speech_detection_thread.join(timeout=2.0)
+                if ai_thread.is_alive():
+                    ai_thread.join(timeout=2.0)
+                if user_thread.is_alive():
+                    user_thread.join(timeout=2.0)
+            except Exception as e:
+                print(f"等待线程结束时出错: {e}")
+            
+            # 更新UI状态
+            self.update_status("idle")
+            print("会话线程已结束") 

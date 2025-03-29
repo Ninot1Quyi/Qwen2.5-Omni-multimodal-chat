@@ -2,6 +2,9 @@ import pyaudio
 import json
 import os
 
+# 调试设置
+DEBUG = False  # 设置为True时开启调试模式，包括保存录音文件
+
 # 音频设置
 AUDIO_FORMAT = pyaudio.paInt16
 CHANNELS = 1
@@ -28,6 +31,6 @@ MIN_POSITIVE_FRAMES = 3
 MIN_NEGATIVE_FRAMES = 20
 
 # 音频播放器设置
-PLAYER_RATE = 24000
-FADE_OUT_DURATION = 0.5
-MAX_FINISH_DURATION = 0.5
+PLAYER_RATE = 24000           # 播放器采样率匹配模型输出
+FADE_OUT_DURATION = 0.15      # 标准淡出持续时间（秒）
+MAX_FINISH_DURATION = 0.25    # 被打断时最大允许的完成时间（秒）

@@ -55,19 +55,20 @@ def run_server(headless=False):
     # 根据平台选择最合适的渲染器
     system_platform = platform.system().lower()
     
-    # 在Windows上直接使用cwebview (最简单的选择)
+    # 在Windows上使用MSHTML (轻量级选择)
     if system_platform == 'windows':
         try:
-            # 注意：这里使用cwebview，它比mshtml更现代，且避免了Rectangle兼容性问题
-            gui_options = 'cwebview'
-            print("[INFO] 使用CWebView作为GUI后端")
+            # 尝试使用Edge WebView2（如果系统已安装）
+            gui_options = 'edgechromium'
+            print("[INFO] 使用Edge WebView2作为GUI后端（轻量级）")
         except Exception as e:
-            # 回退到mshtml
+            # 回退到MSHTML (基于IE的渲染器)
             gui_options = 'mshtml' 
-            print(f"[INFO] 使用MSHTML作为GUI后端 (回退: {e})")
+            print(f"[INFO] 使用MSHTML作为GUI后端（轻量级，回退原因: {e}）")
     else:
         # 在macOS和Linux上使用系统默认
         gui_options = None
+        print("[INFO] 使用系统默认GUI后端")
     
     # 创建窗口并加载HTML
     window = webview.create_window(
@@ -84,6 +85,12 @@ def run_server(headless=False):
     
     # 设置窗口引用
     api.set_window(window)
+    
+    # 配置语音聊天默认参数（与CLI模式相同的默认配置）
+    api.configure_voice_chat({
+        'recording_mode': 'dynamic',     # 默认使用动态录音模式
+        'recording_seconds': 5,          # 默认录音时长（固定模式下使用）
+    })
     
     # 启动窗口，应用平台特定配置
     webview.start(debug=False, http_server=True, gui=gui_options)

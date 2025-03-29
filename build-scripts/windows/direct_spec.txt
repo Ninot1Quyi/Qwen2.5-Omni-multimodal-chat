@@ -24,10 +24,15 @@ datas.extend([
 if os.path.exists('key.json'):
     datas.append(('key.json', '.'))
 
+# 添加ONNX模型文件
+if os.path.exists('models/silero_vad.onnx'):
+    datas.append(('models/silero_vad.onnx', 'models'))
+
 # 基本的hidden imports
 hiddenimports = [
     'pyaudio', 
-    'numpy', 
+    'numpy',
+    'onnxruntime',
     'webview', 
     'threading', 
     'json',
@@ -44,6 +49,15 @@ hiddenimports = [
     'webview.window',
 ]
 
+# 明确排除cefpython3相关的模块
+excludes = [
+    'cefpython3',
+    'torch', 
+    'torchaudio',
+    'transformers',
+    'safetensors',
+]
+
 a = Analysis(
     ['app.py'],
     pathex=[os.path.abspath('.')],
@@ -53,7 +67,7 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=[],
+    excludes=excludes,
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
     cipher=block_cipher,

@@ -285,6 +285,73 @@ def build_executable():
         print(f"  Build process error: {str(e).encode('ascii', errors='replace').decode('ascii')}")
         return False
 
+def sanitize_key_json():
+    """处理key.json文件，替换真实API密钥为示例值"""
+    print("正在处理API密钥信息...")
+    
+    # 创建dist目录（如果不存在）
+    if not os.path.exists('dist'):
+        os.makedirs('dist')
+    
+    # 获取目标目录
+    target_dir = os.path.join('dist', 'QwenOmniVoiceAssistant')
+    if not os.path.exists(target_dir):
+        os.makedirs(target_dir, exist_ok=True)
+    
+    if not os.path.exists('key.json'):
+        print("  未找到key.json文件，将创建示例配置")
+        
+        # 创建示例配置
+        example_config = '''{
+    "api_key": "您的API密钥（请在此处填写您的通义千问API密钥）",
+    "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1"
+}'''
+        
+        try:
+            # 直接写入到目标文件夹
+            with open(os.path.join(target_dir, 'key.json'), 'w', encoding='utf-8') as f:
+                f.write(example_config)
+            print("  已创建示例配置文件 key.json")
+            return True
+        except Exception as e:
+            print(f"  创建示例配置失败: {e}")
+            return False
+    
+    try:
+        # 读取原始key.json
+        import json
+        with open('key.json', 'r', encoding='utf-8') as f:
+            key_data = json.load(f)
+        
+        # 备份API密钥信息
+        original_api_key = key_data.get('api_key', '')
+        if original_api_key:
+            # 创建打包用的示例key.json
+            key_data['api_key'] = "您的API密钥（请在此处填写您的通义千问API密钥）"
+            
+            # 直接写入到目标文件夹
+            with open(os.path.join(target_dir, 'key.json'), 'w', encoding='utf-8') as f:
+                json.dump(key_data, f, ensure_ascii=False, indent=4)
+                
+            # 保存原始版本作为示例，同样放在目标文件夹内
+            with open(os.path.join(target_dir, 'key.json.backup'), 'w', encoding='utf-8') as f:
+                f.write(f"# 这是一个备份文件，包含了原始key.json的格式\n")
+                f.write(f"# 请将您的API密钥替换下面的示例值\n\n")
+                json.dump(key_data, f, ensure_ascii=False, indent=4)
+            
+            print("  已处理API密钥信息：替换为示例值")
+            return True
+        else:
+            print("  API密钥为空，将使用原始文件")
+            # 复制原始文件到目标文件夹
+            with open(os.path.join(target_dir, 'key.json'), 'w', encoding='utf-8') as f:
+                json.dump(key_data, f, ensure_ascii=False, indent=4)
+            print("  已复制原始key.json文件（空API密钥）")
+            return True
+    except Exception as e:
+        print(f"  处理API密钥失败: {e}")
+        return False
+
 def copy_additional_files():
     """复制其他必要的运行时文件"""
     print("正在复制其他必要文件...")
@@ -304,18 +371,10 @@ def copy_additional_files():
         except Exception as e:
             print(f"  警告: 复制README失败: {e}")
             success = False
-            
-    # 确保key.json被复制到正确位置
-    if os.path.exists('key.json'):
-        try:
-            shutil.copy2('key.json', target_dir)
-            print("  已复制 key.json 到应用根目录")
-        except Exception as e:
-            print(f"  警告: 复制key.json失败: {e}")
-            success = False
-    else:
-        print("  警告: 未找到key.json文件，将无法使用API功能")
-        
+    
+    # 处理key.json - 直接处理到目标目录
+    sanitize_key_json()
+    
     # 复制版本信息文件
     if os.path.exists('file_version.txt'):
         try:
@@ -330,9 +389,31 @@ def copy_additional_files():
 def create_shortcut():
     """创建桌面快捷方式脚本"""
     print("创建快捷方式脚本...")
-    shortcut_script = '''@echo off
+    
+    # 获取版本号
+    version = extract_version()
+    
+    # 获取平台信息
+    import platform
+    arch = platform.machine().lower()
+    if arch == 'amd64' or arch == 'x86_64':
+        arch = 'x64'
+    elif arch == 'x86':
+        arch = 'x86'
+    elif 'arm' in arch or 'aarch' in arch:
+        arch = 'arm64'
+    else:
+        arch = platform.architecture()[0]
+    
+    # 获取Windows版本
+    win_ver = platform.win32_ver()[0]
+    
+    # 构建目标文件夹名称 (包含平台信息)
+    target_dir = f'QwenOmniVoiceAssistant_v{version}_win{win_ver}_{arch}'
+    
+    shortcut_script = f'''@echo off
 echo 正在创建桌面快捷方式...
-powershell "$s=(New-Object -COM WScript.Shell).CreateShortcut('%userprofile%\\Desktop\\Qwen-Omni语音助手.lnk');$s.TargetPath='%~dp0QwenOmniVoiceAssistant\\QwenOmniVoiceAssistant.exe';$s.IconLocation='%~dp0QwenOmniVoiceAssistant\\assets\\Qwen.ico';$s.Save()"
+powershell "$s=(New-Object -COM WScript.Shell).CreateShortcut('%userprofile%\\Desktop\\Qwen-Omni语音助手.lnk');$s.TargetPath='%~dp0{target_dir}\\QwenOmniVoiceAssistant.exe';$s.IconLocation='%~dp0{target_dir}\\assets\\Qwen.ico';$s.Save()"
 echo 快捷方式已创建!
 pause
 '''
@@ -350,7 +431,12 @@ if not exist "QwenOmniVoiceAssistant.exe" cd QwenOmniVoiceAssistant
 start QwenOmniVoiceAssistant.exe
 exit
 '''
-        with open('dist/QwenOmniVoiceAssistant/启动语音助手.bat', 'w', encoding='utf-8') as f:
+        
+        # 确保目录存在
+        if not os.path.exists(f'dist/{target_dir}'):
+            os.makedirs(f'dist/{target_dir}', exist_ok=True)
+            
+        with open(f'dist/{target_dir}/启动语音助手.bat', 'w', encoding='utf-8') as f:
             f.write(cn_batch)
         print("  已创建启动批处理文件")
         
@@ -360,23 +446,52 @@ exit
         return False
 
 def rename_dist_folder():
-    """将英文目录重命名为中文（可选）"""
+    """将英文目录重命名为中文（可选），并添加平台信息"""
     try:
-        # 尝试创建一个中文名称的符号链接或快捷方式
+        # 获取版本号
+        version = extract_version()
+        
+        # 获取系统架构信息
+        import platform
+        arch = platform.machine().lower()
+        if arch == 'amd64' or arch == 'x86_64':
+            arch = 'x64'
+        elif arch == 'x86':
+            arch = 'x86'
+        elif 'arm' in arch or 'aarch' in arch:
+            arch = 'arm64'
+        else:
+            arch = platform.architecture()[0]  # 备选方案
+        
+        # 获取Windows版本
+        win_ver = platform.win32_ver()[0]
+        
+        # 构建目标文件夹名称 (包含平台信息)
+        target_dir = f'QwenOmniVoiceAssistant_v{version}_win{win_ver}_{arch}'
+        
+        print("创建中文名称的启动文件...")
+        
+        # 检查目录是否存在
         if os.path.exists('dist/QwenOmniVoiceAssistant'):
-            print("创建中文名称的启动文件...")
-            
             # 创建一个README说明
-            readme_content = '''# Qwen-Omni 语音助手
+            readme_content = f'''# Qwen-Omni 语音助手 v{version}
 
 这是Qwen-Omni语音助手的Windows版本。
+系统要求: Windows {win_ver} {arch}
 
 请双击"启动语音助手.bat"文件来运行应用程序。
 或者运行上一级目录中的"创建桌面快捷方式.bat"来创建桌面快捷方式。
 
 注意：由于Windows系统编码限制，应用程序文件夹使用英文名称，但功能与界面仍然是中文的。
 '''
-            with open('dist/QwenOmniVoiceAssistant/使用说明.txt', 'w', encoding='utf-8') as f:
+            
+            # 确保目录存在 - 此时可能还没有重命名
+            if os.path.exists(f'dist/{target_dir}'):
+                readme_path = f'dist/{target_dir}/使用说明.txt'
+            else:
+                readme_path = 'dist/QwenOmniVoiceAssistant/使用说明.txt'
+                
+            with open(readme_path, 'w', encoding='utf-8') as f:
                 f.write(readme_content)
             
             return True
@@ -425,6 +540,23 @@ def create_version_file():
         print(f"  创建版本信息文件失败: {e}")
         return False
 
+def extract_version():
+    """从version文件中提取版本号"""
+    try:
+        if os.path.exists('file_version.txt'):
+            with open('file_version.txt', 'r', encoding='utf-8') as f:
+                content = f.read()
+                # 查找 FileVersion 字段
+                import re
+                version_match = re.search(r"FileVersion', u'([0-9\.]+)'", content)
+                if version_match:
+                    return version_match.group(1)
+        # 如果找不到版本号，返回默认值        
+        return "0.0.1"
+    except Exception as e:
+        print(f"  提取版本号失败: {e}")
+        return "0.0.1"
+
 def main():
     """主函数，运行打包流程"""
     print("==== Qwen-Omni Voice Assistant Windows Build Tool ====")
@@ -447,6 +579,10 @@ def main():
         
         # 创建版本信息文件
         create_version_file()
+        
+        # 提取版本号，用于文件夹命名
+        version = extract_version()
+        print(f"  当前版本号: {version}")
         
         # 检查依赖并安装
         if not check_dependencies():
@@ -479,11 +615,61 @@ def main():
         # 创建中文访问方式
         rename_dist_folder()
         
+        # 重命名输出文件夹，添加版本号和平台信息
+        if os.path.exists(os.path.join('dist', 'QwenOmniVoiceAssistant')):
+            # 获取系统架构信息
+            import platform
+            arch = platform.machine().lower()
+            if arch == 'amd64' or arch == 'x86_64':
+                arch = 'x64'
+            elif arch == 'x86':
+                arch = 'x86'
+            elif 'arm' in arch or 'aarch' in arch:
+                arch = 'arm64'
+            else:
+                arch = platform.architecture()[0]
+            
+            # 获取Windows版本
+            win_ver = platform.win32_ver()[0]
+            
+            # 获取版本号
+            version = extract_version()
+            versioned_folder = os.path.join('dist', f'QwenOmniVoiceAssistant_v{version}_win{win_ver}_{arch}')
+            
+            if os.path.exists(versioned_folder):
+                shutil.rmtree(versioned_folder)
+            os.rename(os.path.join('dist', 'QwenOmniVoiceAssistant'), versioned_folder)
+            print(f"  已将输出文件夹重命名为: QwenOmniVoiceAssistant_v{version}_win{win_ver}_{arch}")
+            
+            # 更新快捷方式脚本中的路径
+            if os.path.exists('dist/创建桌面快捷方式.bat'):
+                with open('dist/创建桌面快捷方式.bat', 'r', encoding='utf-8') as f:
+                    content = f.read()
+                content = content.replace('QwenOmniVoiceAssistant\\', f'QwenOmniVoiceAssistant_v{version}_win{win_ver}_{arch}\\')
+                with open('dist/创建桌面快捷方式.bat', 'w', encoding='utf-8') as f:
+                    f.write(content)
+                print("  已更新快捷方式脚本中的路径")
+        
         # 最后检查构建结果
-        if os.path.exists(os.path.join('dist', 'QwenOmniVoiceAssistant', 'QwenOmniVoiceAssistant.exe')):
-            print("\nBuild successful! Executable at: dist/QwenOmniVoiceAssistant/QwenOmniVoiceAssistant.exe")
+        version = extract_version()
+        import platform
+        arch = platform.machine().lower()
+        if arch == 'amd64' or arch == 'x86_64':
+            arch = 'x64'
+        elif arch == 'x86':
+            arch = 'x86'
+        elif 'arm' in arch or 'aarch' in arch:
+            arch = 'arm64'
+        else:
+            arch = platform.architecture()[0]
+        
+        win_ver = platform.win32_ver()[0]
+        target_folder = f'QwenOmniVoiceAssistant_v{version}_win{win_ver}_{arch}'
+        
+        if os.path.exists(os.path.join('dist', target_folder, 'QwenOmniVoiceAssistant.exe')):
+            print(f"\nBuild successful! Executable at: dist/{target_folder}/QwenOmniVoiceAssistant.exe")
             print("You can run 'dist/创建桌面快捷方式.bat' to create desktop shortcut")
-            print("Or directly run 'dist/QwenOmniVoiceAssistant/启动语音助手.bat'")
+            print(f"Or directly run 'dist/{target_folder}/启动语音助手.bat'")
             success = True
         else:
             print("\nWarning: Final executable not found, build may not be complete")

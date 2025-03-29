@@ -1,10 +1,14 @@
 # Qwen2.5-Omni Real-time Voice Communication
 
-基于通义千问 Qwen2.5-Omni 的实时语音对话系统，支持实时语音交互、动态语音活动检测和流式音频处理。
+基于通义千问 Qwen2.5-Omni 在线API的实时语音对话系统，支持实时语音交互、动态语音活动检测和流式音频处理。
 
-A real-time voice conversation system based on Qwen2.5-Omni, supporting real-time voice interaction, dynamic voice activity detection, and streaming audio processing.
+A real-time voice conversation system based on Qwen2.5-Omni Online API, supporting real-time voice interaction, dynamic voice activity detection, and streaming audio processing.
 
-> **注意**：这是一个初步的演示版本，主要实现了基础的语音对话功能。我们计划逐步添加更多 Qwen2.5-Omni 支持的多模态交互功能。最终构建一个`全模态`的交互程序。
+> **注意**：这是一个初步的演示版本，主要实现了基础的语音对话功能。
+>
+> 计划逐步添加更多 Qwen2.5-Omni 支持的多模态交互功能。最终构建一个`全模态`的交互程序。
+>
+> **<u>本项目开发过程中使用了大量AI</u>**
 
 ## 1 使用方法
 
@@ -22,9 +26,10 @@ python app.py
    - 当球体显示绿色动画时，表示AI正在回答
    - 再次点击按钮结束对话
    
+
 <p align="center">
-  <img src="https://github.com/Ninot1Quyi/Qwen2.5-Omni-multimodal-chat/blob/main/assets/GUI-1.png" width="45%">
-  <img src="https://github.com/Ninot1Quyi/Qwen2.5-Omni-multimodal-chat/blob/main/assets/GUI-2.png" width="45%">
+  <img src="https://raw.githubusercontent.com/Ninot1Quyi/Qwen2.5-Omni-multimodal-chat/main/assets/GUI-1.png" width="45%">
+  <img src="https://raw.githubusercontent.com/Ninot1Quyi/Qwen2.5-Omni-multimodal-chat/main/assets/GUI-2.png" width="45%">
 </p>
 
 ### 命令行模式
@@ -38,7 +43,7 @@ python app.py --console
 2. 选择录音模式：
    - 动态模式：根据语音活动自动控制录音开始和结束
 3. 开始对话：
-   - 点击“开始”即可语音交流
+   - 点击"开始"即可语音交流
    - AI助手会通过语音回答你的问题
 4. 交互功能：
    - 在AI回答过程中可以直接说话打断
@@ -74,11 +79,11 @@ python app.py --console
 ## 4 环境要求
 
 - Python 3.10（开发环境）
-- [uv](https://github.com/astral-sh/uv) - 快速、现代的Python包管理器
 - PyAudio 及其依赖的音频库
 - onnxruntime - 用于语音活动检测 (替代PyTorch，更轻量)
 - pywebview (用于GUI界面)
 - 麦克风和音频输出设备
+- 推荐：[uv](https://github.com/astral-sh/uv) - 快速、现代的Python包管理器
 
 ## 5 安装说明
 
@@ -112,12 +117,11 @@ python -m venv .venv
 
 ```bash
 # 安装项目依赖
-pip install -r requirements.txt
+pip install -r requirements.txt -i https://mirrors.aliyun.com/pypi/simple/
 ```
 
 3. **配置API密钥**：
-**[API key获取方式](https://help.aliyun.com/zh/model-studio/getting-started/first-api-call-to-qwen?spm=a2c4g.11186623.help-menu-2400256.d_0_1_0.5a06b0a8iZbkAV)**
-复制`key.json.example`为`key.json`，填入你的通义千问API密钥：
+复制`key.json.example`为`key.json`，填入你的通义千问API密钥 **[API key获取方式](https://help.aliyun.com/zh/model-studio/getting-started/first-api-call-to-qwen?spm=a2c4g.11186623.help-menu-2400256.d_0_1_0.5a06b0a8iZbkAV)**：
 ```json
 {
     "api_key": "your-api-key-here",
@@ -135,10 +139,20 @@ python app.py
 python app.py --console
 ```
 
+5. **打包应用**：
+
+项目根目录命令行输入：
+
+```
+.\build-scripts\windows\build.bat
+```
+
+**或双击启动打包脚本`build.bat`，打包文件在`dist`文件夹下**
+
 ### 5.3 常见问题
 
 - **麦克风未检测到**：请检查系统麦克风权限设置，确保应用有权限访问麦克风
-- **运行时缺少依赖**：确保已正确安装所有依赖，如遇问题可尝试`pip install -r requirements.txt --upgrade`
+- **运行时缺少依赖**：确保已正确安装所有依赖，如遇问题可尝试`pip install -r requirements.txt -i https://mirrors.aliyun.com/pypi/simple/`
 - **API密钥无效**：确保已在key.json中填入正确的通义千问API密钥
 
 ### 5.4 高级用户说明
@@ -146,7 +160,7 @@ python app.py --console
 如需使用更高级的包管理工具如uv，可以参考以下步骤：
 
 ```bash
-# 安装uv包管理器
+ 安装uv包管理器
 pip install uv
 
 # 使用uv创建环境
@@ -160,12 +174,20 @@ uv pip install -r requirements.txt
 
 可以在 `config.py` 中调整以下参数：
 
-- `RATE`：音频采样率（默认16000Hz）
-- `CHUNK`：音频数据块大小
-- `MIN_SPEECH_DURATION`：最短语音持续时间
+- `DEBUG`：调试模式开关，启用时会保存录音文件
+- `AUDIO_FORMAT`：音频格式（默认pyaudio.paInt16）
+- `CHANNELS`：音频通道数（默认1）
+- `RATE`：音频采样率（默认16000Hz，兼容Silero VAD）
+- `CHUNK`：音频数据块大小（默认512，相当于32毫秒帧大小）
+- `RECORD_SECONDS`：默认录音秒数
+- `MIN_SPEECH_DURATION`：最短语音持续时间（秒）
 - `SPEECH_VOLUME_THRESHOLD`：语音音量阈值
+- `NORMAL_VOLUME_THRESHOLD`：正常音量阈值
 - `MIN_POSITIVE_FRAMES`：语音检测的最小正帧数
 - `MIN_NEGATIVE_FRAMES`：静音检测的最小负帧数
+- `PLAYER_RATE`：音频播放器采样率（默认24000Hz，匹配模型输出）
+- `FADE_OUT_DURATION`：音频淡出持续时间（秒）
+- `MAX_FINISH_DURATION`：打断时最大允许的完成时间（秒）
 
 ## 7 项目结构
 
@@ -176,10 +198,22 @@ Qwen2.5-Omni-multimodal-chat/
 ├── voice_chat.py          # 语音聊天核心功能
 ├── audio_player.py        # 音频播放组件
 ├── audio_recorder.py      # 音频录制组件
+├── utils.py               # 工具函数库
 ├── config.py              # 配置文件
+├── main.py                # 替代入口点
+├── key.json               # API密钥配置（需自行创建）
+├── key.json.example       # API密钥配置示例
 ├── requirements.txt       # 依赖库列表
+├── file_version.txt       # 文件版本信息
 ├── models/                # 模型目录
-│   └── silero_vad.onnx    # VAD ONNX模型
+│   └── silero_vad.onnx    # VAD ONNX模型（语音活动检测）
+├── assets/                # 静态资源（图标、截图）
+├── build-scripts/         # 构建脚本
+│   └── windows/           # Windows平台构建
+│       ├── build.py       # 构建Python脚本
+│       ├── build.bat      # 构建批处理文件
+│       ├── direct_spec.txt # PyInstaller规范文件
+│       └── README.md      # 构建说明
 ├── web/                   # GUI前端文件
 │   ├── templates/         # HTML模板
 │   │   └── index.html     # 主界面HTML
@@ -188,29 +222,11 @@ Qwen2.5-Omni-multimodal-chat/
 │       │   └── style.css  # 主样式表
 │       └── js/            # JavaScript文件
 │           └── app.js     # 前端逻辑
+├── build/                 # 构建中间文件（自动生成）
+└── dist/                  # 分发包（自动生成）
 ```
 
-## 8 依赖管理
-
-使用uv管理项目依赖：
-
-```bash
-# 重建开发环境（使用requirements.txt）
-uv venv --python=3.10  # 创建Python 3.10虚拟环境
-.venv\Scripts\activate  # 激活环境
-uv pip install -r requirements.txt  # 安装依赖
-
-# 查看已安装的包
-uv pip list
-
-# 检查可更新的包
-uv pip list --outdated
-
-# 生成新的requirements.txt（如有依赖更新）
-uv pip freeze > requirements.txt
-```
-
-## 9 注意事项
+## 8 注意事项
 
 1. 确保系统有可用的麦克风设备
 2. 保持网络连接稳定以确保与API的通信
@@ -241,6 +257,7 @@ MIT License
 
 ## 致谢
 
-- [Qwen2.5-Omni](https://github.com/QwenLM/Qwen2.5-Omni) - 通义千问大语言模型 [相关文档](https://help.aliyun.com/zh/model-studio/user-guide/qwen-omni?spm=a2c4g.11186623.0.0.5aefb0a8nJc2z7#db6d0ff7c371y)
+- [Qwen2.5-Omni](https://github.com/QwenLM/Qwen2.5-Omni) - 通义千问全模特模型 [相关文档](https://help.aliyun.com/zh/model-studio/user-guide/qwen-omni?spm=a2c4g.11186623.0.0.5aefb0a8nJc2z7#db6d0ff7c371y)
 - [Silero VAD](https://github.com/snakers4/silero-vad) - 语音活动检测模型 
 - [pywebview](https://pywebview.flowrl.com/) - Python GUI框架
+- [Cursor](https://www.cursor.com/cn) - AI代码编辑器

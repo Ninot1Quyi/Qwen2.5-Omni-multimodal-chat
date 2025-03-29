@@ -387,8 +387,8 @@ def copy_additional_files():
     return success
 
 def create_shortcut():
-    """创建桌面快捷方式脚本"""
-    print("创建快捷方式脚本...")
+    """创建快捷方式批处理文件"""
+    print("创建启动批处理文件...")
     
     # 获取版本号
     version = extract_version()
@@ -411,18 +411,7 @@ def create_shortcut():
     # 构建目标文件夹名称 (包含平台信息)
     target_dir = f'QwenOmniVoiceAssistant_v{version}_win{win_ver}_{arch}'
     
-    shortcut_script = f'''@echo off
-echo 正在创建桌面快捷方式...
-powershell "$s=(New-Object -COM WScript.Shell).CreateShortcut('%userprofile%\\Desktop\\Qwen-Omni语音助手.lnk');$s.TargetPath='%~dp0{target_dir}\\QwenOmniVoiceAssistant.exe';$s.IconLocation='%~dp0{target_dir}\\assets\\Qwen.ico';$s.Save()"
-echo 快捷方式已创建!
-pause
-'''
-    
     try:
-        with open('dist/创建桌面快捷方式.bat', 'w', encoding='utf-8') as f:
-            f.write(shortcut_script)
-        print("  已创建快捷方式脚本")
-        
         # 创建一个中文名称的快捷方式批处理文件
         cn_batch = '''@echo off
 echo 创建"Qwen-Omni语音助手"快捷方式...
@@ -442,7 +431,7 @@ exit
         
         return True
     except Exception as e:
-        print(f"  创建快捷方式脚本失败: {e}")
+        print(f"  创建启动批处理文件失败: {e}")
         return False
 
 def rename_dist_folder():
@@ -480,7 +469,6 @@ def rename_dist_folder():
 系统要求: Windows {win_ver} {arch}
 
 请双击"启动语音助手.bat"文件来运行应用程序。
-或者运行上一级目录中的"创建桌面快捷方式.bat"来创建桌面快捷方式。
 
 注意：由于Windows系统编码限制，应用程序文件夹使用英文名称，但功能与界面仍然是中文的。
 '''
@@ -640,15 +628,6 @@ def main():
                 shutil.rmtree(versioned_folder)
             os.rename(os.path.join('dist', 'QwenOmniVoiceAssistant'), versioned_folder)
             print(f"  已将输出文件夹重命名为: QwenOmniVoiceAssistant_v{version}_win{win_ver}_{arch}")
-            
-            # 更新快捷方式脚本中的路径
-            if os.path.exists('dist/创建桌面快捷方式.bat'):
-                with open('dist/创建桌面快捷方式.bat', 'r', encoding='utf-8') as f:
-                    content = f.read()
-                content = content.replace('QwenOmniVoiceAssistant\\', f'QwenOmniVoiceAssistant_v{version}_win{win_ver}_{arch}\\')
-                with open('dist/创建桌面快捷方式.bat', 'w', encoding='utf-8') as f:
-                    f.write(content)
-                print("  已更新快捷方式脚本中的路径")
         
         # 最后检查构建结果
         version = extract_version()
@@ -668,8 +647,7 @@ def main():
         
         if os.path.exists(os.path.join('dist', target_folder, 'QwenOmniVoiceAssistant.exe')):
             print(f"\nBuild successful! Executable at: dist/{target_folder}/QwenOmniVoiceAssistant.exe")
-            print("You can run 'dist/创建桌面快捷方式.bat' to create desktop shortcut")
-            print(f"Or directly run 'dist/{target_folder}/启动语音助手.bat'")
+            print(f"You can directly run 'dist/{target_folder}/启动语音助手.bat'")
             
             # 创建API Key说明文件
             try:

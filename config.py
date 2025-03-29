@@ -14,7 +14,7 @@ RECORD_SECONDS = 5
 
 # API 设置
 try:
-    with open('key.json', 'r') as f:
+    with open('key.json', 'r', encoding='utf-8') as f:
         api_config = json.load(f)
     API_KEY = api_config['api_key']
     BASE_URL = api_config['base_url']

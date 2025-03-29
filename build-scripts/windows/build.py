@@ -303,7 +303,7 @@ def sanitize_key_json():
         
         # 创建示例配置
         example_config = '''{
-    "api_key": "您的API密钥（请在此处填写您的通义千问API密钥）",
+    "api_key": "yout api key",
     "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1"
 }'''
         
@@ -327,17 +327,17 @@ def sanitize_key_json():
         original_api_key = key_data.get('api_key', '')
         if original_api_key:
             # 创建打包用的示例key.json
-            key_data['api_key'] = "您的API密钥（请在此处填写您的通义千问API密钥）"
+            key_data['api_key'] = "yout api key"
             
             # 直接写入到目标文件夹
             with open(os.path.join(target_dir, 'key.json'), 'w', encoding='utf-8') as f:
                 json.dump(key_data, f, ensure_ascii=False, indent=4)
                 
-            # 保存原始版本作为示例，同样放在目标文件夹内
-            with open(os.path.join(target_dir, 'key.json.backup'), 'w', encoding='utf-8') as f:
-                f.write(f"# 这是一个备份文件，包含了原始key.json的格式\n")
-                f.write(f"# 请将您的API密钥替换下面的示例值\n\n")
-                json.dump(key_data, f, ensure_ascii=False, indent=4)
+            # # 保存原始版本作为示例，同样放在目标文件夹内
+            # with open(os.path.join(target_dir, 'key.json.backup'), 'w', encoding='utf-8') as f:
+            #     f.write(f"# 这是一个备份文件，包含了原始key.json的格式\n")
+            #     f.write(f"# 请将您的API密钥替换下面的示例值\n\n")
+            #     json.dump(key_data, f, ensure_ascii=False, indent=4)
             
             print("  已处理API密钥信息：替换为示例值")
             return True
@@ -670,6 +670,19 @@ def main():
             print(f"\nBuild successful! Executable at: dist/{target_folder}/QwenOmniVoiceAssistant.exe")
             print("You can run 'dist/创建桌面快捷方式.bat' to create desktop shortcut")
             print(f"Or directly run 'dist/{target_folder}/启动语音助手.bat'")
+            
+            # 创建API Key说明文件
+            try:
+                api_key_note_filename = '请先在key.json中填写api key [获取教程].txt'
+                api_key_note_path = os.path.join('dist', target_folder, api_key_note_filename)
+                api_key_note_content = """前往这里获取api key：
+https://help.aliyun.com/zh/model-studio/getting-started/first-api-call-to-qwen?spm=a2c4g.11186623.help-menu-2400256.d_0_1_0.5a06b0a8iZbkAV"""
+                with open(api_key_note_path, 'w', encoding='utf-8') as f:
+                    f.write(api_key_note_content)
+                print(f"  已创建API Key说明文件: dist/{target_folder}/{api_key_note_filename}")
+            except Exception as e:
+                print(f"  警告: 创建API Key说明文件失败: {e}")
+
             success = True
         else:
             print("\nWarning: Final executable not found, build may not be complete")

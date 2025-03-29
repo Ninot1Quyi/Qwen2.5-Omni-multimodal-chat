@@ -371,18 +371,18 @@ class QwenVoiceChat:
                     current_session_id = self.current_session_id
                 
                 # 通知状态变化
-            if self.on_state_change:
-                self.on_state_change("speaking")
+                if self.on_state_change:
+                    self.on_state_change("speaking")
                 
                 print("\n正在发送请求到Qwen-Omni进行处理...")
-            
-            response_data = {
-                "ai_text": "",
-                "has_audio": False,
-                "current_transcript": "",
-                "interrupted": False
-            }
-            
+                
+                response_data = {
+                    "ai_text": "",
+                    "has_audio": False,
+                    "current_transcript": "",
+                    "interrupted": False
+                }
+                
                 # 准备保存AI音频，仅在DEBUG模式下保存
                 timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
                 ai_audio_file = None
@@ -398,22 +398,22 @@ class QwenVoiceChat:
                     ai_audio_buffer = bytearray()
                 
                 # 创建API请求
-                    completion = self.client.chat.completions.create(
-                        model="qwen-omni-turbo",
-                        messages=self.messages,
-                        modalities=["text", "audio"],
-                        audio={"voice": "Chelsie", "format": "wav"},
-                        stream=True,
-                        stream_options={"include_usage": True},
-                    )
-                    
+                completion = self.client.chat.completions.create(
+                    model="qwen-omni-turbo",
+                    messages=self.messages,
+                    modalities=["text", "audio"],
+                    audio={"voice": "Chelsie", "format": "wav"},
+                    stream=True,
+                    stream_options={"include_usage": True},
+                )
+                
                 # 准备音频缓冲和状态
                 audio_buffer = ""
                 audio_chunk_count = 0
                 is_first_audio = True
                 
                 # 处理流式响应
-                    for chunk in completion:
+                for chunk in completion:
                     # 检查语音检测事件 - 如果用户开始说话立即停止处理
                     if self.speech_detected_event.is_set():
                         print("\n[检测到用户开始说话，停止AI响应]")
@@ -434,7 +434,7 @@ class QwenVoiceChat:
                                 self.audio_player.stop_with_fadeout(fadeout_time=0.1)
                                 print("[快速响应] 会话已过期，执行快速淡出")
                             break
-                            
+                    
                     # 检查当前状态是否已被打断
                     with self.state_lock:
                         if self.current_state == ChatState.INTERRUPTED:
@@ -445,24 +445,24 @@ class QwenVoiceChat:
                                 self.audio_player.stop_with_fadeout(fadeout_time=0.1)
                                 print("[快速响应] 用户打断状态，执行快速淡出")
                             break
-                        
+                    
                     # 处理响应内容
-                        if chunk.choices:
-                            delta = chunk.choices[0].delta
+                    if chunk.choices:
+                        delta = chunk.choices[0].delta
+                        
+                        if hasattr(delta, "content") and delta.content:
+                            response_data["ai_text"] += delta.content
+                            print(delta.content, end="", flush=True)
+                        
+                        if hasattr(delta, "audio") and delta.audio:
+                            response_data["has_audio"] = True
                             
-                            if hasattr(delta, "content") and delta.content:
-                                response_data["ai_text"] += delta.content
-                                print(delta.content, end="", flush=True)
+                            if "transcript" in delta.audio:
+                                transcript = delta.audio["transcript"]
+                                if transcript:
+                                    response_data["current_transcript"] += transcript
                             
-                            if hasattr(delta, "audio") and delta.audio:
-                                response_data["has_audio"] = True
-                                
-                                if "transcript" in delta.audio:
-                                    transcript = delta.audio["transcript"]
-                                    if transcript:
-                                        response_data["current_transcript"] += transcript
-                                
-                                if "data" in delta.audio:
+                            if "data" in delta.audio:
                                 # 再次检查是否被打断
                                 if self.speech_detected_event.is_set():
                                     print("\n[语音块处理中检测到用户开始说话，停止AI响应]")
@@ -471,7 +471,7 @@ class QwenVoiceChat:
                                         self.audio_player.stop_with_fadeout(fadeout_time=0.1)
                                         print("[快速响应] 语音块处理中检测到用户开始说话，执行快速淡出")
                                     break
-                                    
+                                
                                 # 处理前再次检查会话是否已过期或被打断
                                 with self.state_lock:
                                     if self.current_state == ChatState.INTERRUPTED:
@@ -490,21 +490,21 @@ class QwenVoiceChat:
                                     audio_bytes = base64.b64decode(audio_data)
                                     ai_audio_buffer.extend(audio_bytes)
                                 
-                                    # 立即处理音频数据
-                                    if not is_first_audio:
+                                # 立即处理音频数据
+                                if not is_first_audio:
                                     self.audio_player.add_audio_data(audio_data)
-                                    else:
+                                else:
                                     audio_buffer += audio_data
-                                        audio_chunk_count += 1
-                                        
-                                        if audio_chunk_count >= 2:  # 减少初始缓冲
-                                            is_first_audio = False
-                                            self.audio_player.start_stream()
-                                            print("\n开始音频播放...")
-                                            if audio_buffer:
-                                                self.audio_player.add_audio_data(audio_buffer)
-                                                audio_buffer = ""
-                    
+                                    audio_chunk_count += 1
+                                    
+                                    if audio_chunk_count >= 2:  # 减少初始缓冲
+                                        is_first_audio = False
+                                        self.audio_player.start_stream()
+                                        print("\n开始音频播放...")
+                                        if audio_buffer:
+                                            self.audio_player.add_audio_data(audio_buffer)
+                                            audio_buffer = ""
+                
                 # 处理最后的音频缓冲
                 with self.state_lock:
                     if (not self.speech_detected_event.is_set() and 
@@ -521,17 +521,17 @@ class QwenVoiceChat:
                         print(f"保存AI音频失败: {e}")
                 elif not DEBUG:
                     print(f"DEBUG模式未开启，跳过保存AI响应音频")
-                    
+                
                 # 等待音频播放完成，除非被打断
                 with self.state_lock:
                     should_wait_audio = (not self.speech_detected_event.is_set() and
-                                        self.current_state != ChatState.INTERRUPTED and
-                                        self.audio_player.is_playing)
+                                      self.current_state != ChatState.INTERRUPTED and
+                                      self.audio_player.is_playing)
                 
                 if should_wait_audio:
                     print("\n数据流完成，等待音频播放结束...")
                     max_wait = 30.0
-                        wait_start = time.time()
+                    wait_start = time.time()
                     
                     while True:
                         # 检查用户是否开始说话 - 立即停止等待
@@ -549,16 +549,15 @@ class QwenVoiceChat:
                                 self.audio_player.playback_finished.is_set() or
                                 time.time() - wait_start >= max_wait):
                                 break
-                            
+                        
                         # 检查是否有足够的队列数据
                         if (self.audio_player.audio_queue.qsize() == 0 and 
                             self.audio_player.buffer_empty.is_set() and 
                             not self.audio_player.is_audio_complete()):
-                            
-                                time.sleep(0.5)
-                                if self.audio_player.is_audio_complete():
+                            time.sleep(0.5)
+                            if self.audio_player.is_audio_complete():
                                 print("\n音频播放已完成")
-                                    break
+                                break
                         
                         # 短暂等待
                         self.audio_player.playback_finished.wait(0.1)
@@ -572,24 +571,24 @@ class QwenVoiceChat:
                     self.full_transcript += response_data["current_transcript"] + " "
                     print(f"\n当前回复转录: {response_data['current_transcript']}")
                     
-                assistant_message = {
-                    "role": "assistant",
-                    "content": [{"type": "text", "text": response_data["current_transcript"]}]
-                }
-                self.messages.append(assistant_message)
-            elif response_data["ai_text"]:
-                assistant_message = {
-                    "role": "assistant",
-                    "content": [{"type": "text", "text": response_data["ai_text"]}]
-                }
-                self.messages.append(assistant_message)
-            
+                    assistant_message = {
+                        "role": "assistant",
+                        "content": [{"type": "text", "text": response_data["current_transcript"]}]
+                    }
+                    self.messages.append(assistant_message)
+                elif response_data["ai_text"]:
+                    assistant_message = {
+                        "role": "assistant",
+                        "content": [{"type": "text", "text": response_data["ai_text"]}]
+                    }
+                    self.messages.append(assistant_message)
+                
                 # 打印对话历史
-            self.print_conversation_history()
+                self.print_conversation_history()
             
             except Exception as e:
                 print(f"\nAI响应处理出错: {e}")
-                
+            
             finally:
                 # 停止音频播放
                 if self.audio_player.is_playing:
@@ -604,8 +603,8 @@ class QwenVoiceChat:
                     self.current_state = ChatState.IDLE
                 
                 # 通知状态变化回调
-            if self.on_state_change:
-                self.on_state_change("listening")
+                if self.on_state_change:
+                    self.on_state_change("listening")
         
     def _interrupt_ai_speech(self):
         """打断AI说话"""

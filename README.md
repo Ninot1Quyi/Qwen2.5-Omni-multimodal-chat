@@ -116,7 +116,7 @@ pip install -r requirements.txt
 ```
 
 3. **配置API密钥**：
-
+**[API key获取方式](https://help.aliyun.com/zh/model-studio/getting-started/first-api-call-to-qwen?spm=a2c4g.11186623.help-menu-2400256.d_0_1_0.5a06b0a8iZbkAV)**
 复制`key.json.example`为`key.json`，填入你的通义千问API密钥：
 ```json
 {

@@ -237,7 +237,7 @@ Qwen2.5-Omni-multimodal-chat/
 
 ## 11 许可证
 
-MIT License
+本项目采用 MIT 许可证，这意味着您可以自由地使用、修改、分发本软件，无论是用于个人还是商业目的。详情请参见项目根目录下的 [LICENSE](./LICENSE) 文件。
 
 ## 12 贡献指南
 

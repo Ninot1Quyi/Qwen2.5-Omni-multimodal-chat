@@ -85,7 +85,7 @@ python app.py --console
 
 ## 5 安装说明
 
-### 5.1 方法一：直接下载可执行文件（推荐）
+### 5.1 方法一：直接下载可执行文件
 
 访问[Releases页面](https://github.com/Ninot1Quyi/Qwen2.5-Omni-multimodal-chat/releases)下载最新的Windows可执行文件。
 

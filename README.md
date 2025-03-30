@@ -17,7 +17,6 @@ A real-time voice conversation system based on Qwen2.5-Omni Online API, supporti
 1. 启动GUI界面：
 ```bash
 python app.py
-#uv run python app.py
 ```
 
 2. 在打开的窗口中：
@@ -37,7 +36,6 @@ python app.py
 1. 使用命令行模式启动：
 ```bash
 python app.py --console
-#uv run python app.py --console
 ```
 
 2. 选择录音模式：
@@ -91,7 +89,9 @@ python app.py --console
 
 访问[Releases页面](https://github.com/Ninot1Quyi/Qwen2.5-Omni-multimodal-chat/releases)下载最新的Windows可执行文件。
 
-下载后解压，双击"QwenOmniVoiceAssistant.exe"即可运行。
+下载后解压，在`key.json`中填入你的通义千问API密钥 **[API key获取方式](https://help.aliyun.com/zh/model-studio/getting-started/first-api-call-to-qwen?spm=a2c4g.11186623.help-menu-2400256.d_0_1_0.5a06b0a8iZbkAV)**：
+
+双击"QwenOmniVoiceAssistant.exe"即可运行。
 
 ### 5.2 方法二：从源码构建
 

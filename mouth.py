@@ -6,7 +6,7 @@ import time
 import queue
 from config import PLAYER_RATE, FADE_OUT_DURATION, MAX_FINISH_DURATION
 
-class AudioPlayer:
+class Mouth:
     """支持流式播放和用户打断的音频播放器"""
     def __init__(self):
         self.p = pyaudio.PyAudio()
@@ -39,6 +39,7 @@ class AudioPlayer:
     def start_stream(self):
         with self.stream_lock:
             if self.stream is not None:
+                print("11111111")
                 self.stop_stream()
                 
             try:
@@ -235,6 +236,7 @@ class AudioPlayer:
     
     def stop_stream(self):
         """正常停止音频播放"""
+        print("正常停止音频播放")
         self.should_stop = True
         self.is_playing = False
         self.smooth_interrupt = False
@@ -252,6 +254,7 @@ class AudioPlayer:
         with self.stream_lock:
             if self.stream:
                 try:
+                    print(2222222)
                     self.stream.stop_stream()
                     self.stream.close()
                     self.stream = None
@@ -338,6 +341,7 @@ class AudioPlayer:
         with self.stream_lock:
             if self.stream:
                 try:
+                    print(333333333)
                     self.stream.stop_stream()
                     self.stream.close()
                 except Exception as e:
@@ -357,6 +361,7 @@ class AudioPlayer:
     
     def close(self):
         """关闭音频设备"""
+        print(44444444)
         self.stop_stream()
         
         try:

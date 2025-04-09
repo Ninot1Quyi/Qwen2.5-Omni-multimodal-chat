@@ -28,7 +28,7 @@ SPEECH_CONFIRM_FRAMES = 2  # 需要连续5帧检测到语音才开始录音
 # 预检测缓冲区大小 - 用于存储可能的语音开始前的数据
 PRE_DETECTION_BUFFER_SIZE = int(2.0 * RATE / CHUNK)  # 2秒的预检测缓冲
 
-class AudioRecorder:
+class Ears:
     def __init__(self):
         self.p = pyaudio.PyAudio()
         self.mic_stream = None
@@ -409,7 +409,7 @@ class AudioRecorder:
     
     def record_until_silence(self, temp_file="temp_audio.wav"):
         """录音直到检测到静音"""
-        print("等待语音输入...")
+        print("[ears]等待语音输入...")
         max_wait_time = 60
         
         self.speech_detected_event.clear()

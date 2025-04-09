@@ -4,8 +4,11 @@ import webview
 import threading
 import argparse
 import platform
-from webview_api import VoiceChatAPI
+from webview_api import AgentAPI
 from utils import apply_windows_compatibility_patches
+from Agent import Agent
+from mouth import Mouth
+from ears import Ears
 
 def run_server(headless=False):
     """启动pywebview服务器
@@ -20,7 +23,7 @@ def run_server(headless=False):
     current_dir = os.path.dirname(os.path.abspath(__file__))
     
     # 创建API实例
-    api = VoiceChatAPI()
+    api = AgentAPI()
     
     # 如果是无GUI模式，跳过GUI初始化
     if headless:
@@ -87,7 +90,7 @@ def run_server(headless=False):
     api.set_window(window)
     
     # 配置语音聊天默认参数（与CLI模式相同的默认配置）
-    api.configure_voice_chat({
+    api.configure_agent({
         'recording_mode': 'dynamic',     # 默认使用动态录音模式
         'recording_seconds': 5,          # 默认录音时长（固定模式下使用）
     })
@@ -97,8 +100,7 @@ def run_server(headless=False):
 
 def run_console():
     """运行命令行版本"""
-    from voice_chat import QwenVoiceChat
-    voice_chat = QwenVoiceChat()
+    voice_chat = Agent()
     try:
         voice_chat.start_conversation()
     except KeyboardInterrupt:

@@ -196,9 +196,9 @@ uv pip install -r requirements.txt
 Qwen2.5-Omni-multimodal-chat/
 ├── app.py                 # 主入口文件，支持GUI和命令行模式
 ├── webview_api.py         # pywebview API接口
-├── voice_chat.py          # 语音聊天核心功能
-├── audio_player.py        # 音频播放组件
-├── audio_recorder.py      # 音频录制组件
+├── Agent.py               # 语音聊天核心功能
+├── mouth.py              # 音频播放组件
+├── ears.py               # 音频录制组件
 ├── utils.py               # 工具函数库
 ├── config.py              # 配置文件
 ├── main.py                # 替代入口点

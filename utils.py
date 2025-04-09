@@ -6,17 +6,35 @@ import pyaudio
 import platform
 import sys
 import inspect
+import time
 
 def convert_frames_to_wav(frames, p: pyaudio.PyAudio, channels, format, rate):
     """将音频帧转换为WAV格式字节"""
+    start_time = time.time()
+    
+    print(f"[Utils][DEBUG] 开始转换音频帧，帧数: {len(frames)}")
+    
     buffer = io.BytesIO()
     wf = wave.open(buffer, 'wb')
     wf.setnchannels(channels)
     wf.setsampwidth(p.get_sample_size(format))
     wf.setframerate(rate)
-    wf.writeframes(b''.join(frames))
+    
+    join_start = time.time()
+    frames_joined = b''.join(frames)
+    join_end = time.time()
+    
+    wf.writeframes(frames_joined)
     wf.close()
-    return buffer.getvalue()
+    
+    result = buffer.getvalue()
+    end_time = time.time()
+    
+    print(f"[Utils][DEBUG] 音频帧转换完成，耗时: {end_time - start_time:.4f} 秒")
+    print(f"[Utils][DEBUG] -- 其中帧合并耗时: {join_end - join_start:.4f} 秒")
+    print(f"[Utils][DEBUG] 转换后WAV大小: {len(result)} 字节")
+    
+    return result
 
 def save_wav_file(filename, frames, p: pyaudio.PyAudio, channels, format, rate):
     """将音频帧保存为WAV文件"""

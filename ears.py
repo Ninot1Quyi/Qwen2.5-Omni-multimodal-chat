@@ -156,14 +156,19 @@ class Ears:
                     print(f"启动麦克风流失败: {e}")
     
     def stop_mic_stream(self):
-        """停止麦克风流"""
+        """停止麦克风流和所有监听线程"""
+        print("开始停止麦克风流和所有监听线程...")
+        
+        # 首先停止持续监听标志
+        self.continuous_listening = False
+        
         with self.mic_lock:
-            self.continuous_listening = False
+            # 无论状态如何，都尝试停止麦克风流
+            self.is_mic_active = False
             
-            if self.is_mic_active and self.mic_stream:
+            if self.mic_stream:
                 try:
-                    self.is_mic_active = False
-                    time.sleep(0.1)
+                    print("停止麦克风流...")
                     self.mic_stream.stop_stream()
                     self.mic_stream.close()
                     self.mic_stream = None
@@ -171,6 +176,23 @@ class Ears:
                 except Exception as e:
                     print(f"停止麦克风流时出错: {e}")
                     self.mic_stream = None
+        
+        # 等待监听线程结束
+        if self.listening_thread and self.listening_thread.is_alive():
+            print("等待监听线程结束...")
+            try:
+                self.listening_thread.join(timeout=1.0)
+                if not self.listening_thread.is_alive():
+                    print("监听线程已结束")
+                else:
+                    print("监听线程未能在超时时间内结束，但已设置停止标志")
+            except Exception as e:
+                print(f"等待监听线程结束时出错: {e}")
+        
+        # 重置状态
+        self.reset_vad_state()
+        self.speech_detected_event.clear()
+        self.speech_ended_event.clear()
     
     def is_mic_stream_active(self):
         """检查麦克风流是否已启动

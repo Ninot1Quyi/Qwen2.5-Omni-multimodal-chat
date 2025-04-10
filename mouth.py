@@ -104,10 +104,17 @@ class Mouth:
         buffer = b""
         min_buffer_size = 1024  # 减小缓冲区以提高响应速度
         is_initial_buffer = True
+        last_check_time = time.time()
+        check_interval = 0.005  # 每5毫秒检查一次终止请求
         
         try:
             while self.is_playing and (not self.should_stop or self.smooth_interrupt):
                 current_time = time.time()
+                
+                # 立即检查是否有直接停止请求
+                if self.should_stop and not self.smooth_interrupt:
+                    print("检测到直接停止请求，立即终止播放")
+                    break
                 
                 # 处理淡出效果
                 if self.smooth_interrupt and self.interrupt_time and self.fade_out_enabled and not self.fade_out_active:
@@ -118,16 +125,28 @@ class Mouth:
                 # 检查是否已经到达最大完成时间
                 if self.smooth_interrupt and self.interrupt_time:
                     elapsed = current_time - self.interrupt_time
-                    if elapsed > self.max_finish_duration:
-                        print("达到最大等待时间，强制停止音频")
+                    if elapsed > self.max_finish_duration * 0.8:  # 降低到80%的最大等待时间
+                        print("达到最大等待时间的80%，强制停止音频")
                         break
                 
                 try:
                     # 处理队列中的音频数据
+                    chunks_processed = 0
                     while not self.audio_queue.empty():
+                        # 每处理几个数据块就检查一次终止请求
+                        chunks_processed += 1
+                        if chunks_processed % 5 == 0 and self.should_stop and not self.smooth_interrupt:
+                            print("数据处理中检测到停止请求，立即终止")
+                            break
+                            
                         chunk = self.audio_queue.get(block=False)
                         buffer += chunk
                         self.audio_queue.task_done()
+                    
+                    # 再次检查终止请求
+                    if self.should_stop and not self.smooth_interrupt:
+                        print("数据处理后检测到停止请求，立即终止")
+                        break
                     
                     # 当缓冲区有足够数据，或者是最后的数据时播放
                     if len(buffer) >= min_buffer_size or (len(buffer) > 0 and self.audio_queue.empty()):
@@ -141,7 +160,6 @@ class Mouth:
                             audio_data = np.frombuffer(buffer, dtype=np.int16)
                             
                             # 使用非线性淡出曲线，在开始时变化较慢，结束时变化较快
-                            # 这样可以使淡出效果在开始时更平滑，结束时更快
                             volume_factor = max(0, 1.0 - (fade_progress * fade_progress))
                             
                             # 应用音量变化
@@ -149,22 +167,37 @@ class Mouth:
                             buffer = audio_data.tobytes()
                             
                             # 如果淡出接近完成，结束播放
-                            if fade_progress >= 0.7:  # 降低阈值，当达到70%时就结束
+                            if fade_progress >= 0.6:  # 降低阈值，当达到60%时就结束
                                 print(f"淡出已达到阈值 {fade_progress:.2f}，结束播放")
                                 break
                         
                         # 检查是否应当强制停止(如果打断且超过了最大时间)
                         if self.smooth_interrupt and self.interrupt_time:
                             elapsed = current_time - self.interrupt_time
-                            if elapsed > self.max_finish_duration * 0.5:  # 进一步减小等待时间
+                            if elapsed > self.max_finish_duration * 0.4:  # 进一步减小等待时间到40%
                                 print("打断等待时间过长，强制停止")
                                 break
+                        
+                        # 播放前再次检查终止请求
+                        if self.should_stop and not self.smooth_interrupt:
+                            print("播放前检测到停止请求，立即终止")
+                            break
                         
                         # 播放音频数据
                         with self.stream_lock:
                             if self.stream and (not self.should_stop or self.smooth_interrupt):
                                 try:
-                                    self.stream.write(buffer, exception_on_underflow=False)
+                                    # 将大块数据分成小块播放，每块之间检查终止请求
+                                    if len(buffer) > 2048 and not self.smooth_interrupt:
+                                        chunks = [buffer[i:i+2048] for i in range(0, len(buffer), 2048)]
+                                        for i, small_chunk in enumerate(chunks):
+                                            # 每播放一小块就检查终止请求
+                                            if i > 0 and self.should_stop and not self.smooth_interrupt:
+                                                print(f"分块播放中检测到停止请求，已播放{i}/{len(chunks)}块，立即终止")
+                                                break
+                                            self.stream.write(small_chunk, exception_on_underflow=False)
+                                    else:
+                                        self.stream.write(buffer, exception_on_underflow=False)
                                 except Exception as e:
                                     print(f"音频播放过程中出错: {e}")
                                     break
@@ -182,18 +215,30 @@ class Mouth:
                             self.playback_finished.set()
                             
                             # 等待更多音频数据
-                            if self.last_audio_time and (current_time - self.last_audio_time) > 0.5:  # 从1.0降为0.5
+                            if self.last_audio_time and (current_time - self.last_audio_time) > 0.3:  # 从0.5降为0.3秒
                                 print("等待音频数据超时，播放完成")
                                 break
                     
-                    # 短暂休眠以降低CPU使用率
-                    time.sleep(0.001)
+                    # 定期检查终止请求，而不仅仅是在循环开始时
+                    if current_time - last_check_time >= check_interval:
+                        last_check_time = current_time
+                        if self.should_stop and not self.smooth_interrupt:
+                            print("定期检查中发现停止请求，立即终止")
+                            break
+                    
+                    # 短暂休眠以降低CPU使用率，但不要休眠太久
+                    time.sleep(0.0005)  # 减少休眠时间，提高响应速度
                     
                 except Exception as e:
                     print(f"音频播放错误: {e}")
-                    time.sleep(0.01)
+                    # 出错后立即检查终止请求
+                    if self.should_stop:
+                        print("错误处理中检测到停止请求，立即终止")
+                        break
+                    time.sleep(0.005)  # 出错后的休眠时间也减少
         
         finally:
+            print("音频播放线程准备退出...")
             self.is_playing = False
             self.smooth_interrupt = False
             self.fade_out_active = False
@@ -236,7 +281,8 @@ class Mouth:
     
     def stop_stream(self):
         """正常停止音频播放"""
-        print("正常停止音频播放")
+        start_time = time.time()
+        print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] 开始停止音频播放")
         self.should_stop = True
         self.is_playing = False
         self.smooth_interrupt = False
@@ -266,7 +312,9 @@ class Mouth:
         self.buffer_empty.set()
         self.playback_finished.set()
         self.last_audio_time = None
-        print("音频流已停止")
+        end_time = time.time()
+        execution_time = end_time - start_time
+        print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] 音频流已停止，执行耗时: {execution_time:.4f}秒")
     
     def stop_with_fadeout(self, fadeout_time=0.1):
         """使用快速淡出效果停止音频播放
@@ -304,6 +352,9 @@ class Mouth:
     
     def stop_immediately(self):
         """立即停止音频播放并清空队列"""
+        print("执行立即停止播放操作...")
+        start_time = time.time()
+        
         # 首先设置所有标志位
         self.should_stop = True
         self.is_playing = False
@@ -317,47 +368,17 @@ class Mouth:
         except Exception as e:
             print(f"清空音频队列出错(已忽略): {e}")
         
-        # 播放一段短暂的静音以平滑过渡
-        if self.stream and self.fade_out_enabled:
-            try:
-                print("播放短暂静音以实现平滑结束...")
-                silent_samples = int(PLAYER_RATE * 0.02)  # 缩短静音时长
-                silence = np.zeros(silent_samples, dtype=np.int16)
-                
-                with self.stream_lock:
-                    if self.stream:
-                        try:
-                            self.stream.write(silence.tobytes(), exception_on_underflow=False)
-                        except Exception:
-                            pass  # 忽略任何错误，确保能继续执行
-            except Exception as e:
-                print(f"播放静音时出错(已忽略): {e}")
+
+        # 调用stop_stream完成其余的停止操作
+        self.stop_stream()
         
-        # 强制停止音频线程
-        if self.audio_thread and self.audio_thread.is_alive():
-            self.audio_thread.join(timeout=0.5)  # 减少等待时间
-        
-        # 关闭并释放音频流
-        with self.stream_lock:
-            if self.stream:
-                try:
-                    print(333333333)
-                    self.stream.stop_stream()
-                    self.stream.close()
-                except Exception as e:
-                    print(f"关闭音频流时出错(已忽略): {e}")
-                finally:
-                    self.stream = None
-        
-        # 重置所有状态
-        self.buffer_empty.set()
-        self.playback_finished.set()
-        self.last_audio_time = None
-        self.fade_out_active = False
+        # 重置其他状态（stop_stream没有重置的部分）
         self.fade_out_start_time = None
         self.interrupt_time = None
         
-        print("音频流已立即停止")
+        end_time = time.time()
+        execution_time = end_time - start_time
+        print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] 音频流已立即停止，执行耗时: {execution_time:.4f}秒")
     
     def close(self):
         """关闭音频设备"""

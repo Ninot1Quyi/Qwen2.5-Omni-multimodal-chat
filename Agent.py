@@ -287,10 +287,6 @@ class Agent:
         # 设置事件监听器
         self.state_manager.add_event_listener(SystemEvent.USER_INTERRUPT, self._on_user_interrupt)
         
-        # 启动麦克风流
-        print("正在初始化麦克风流以进行持续监听...")
-        self.audio_recorder.start_mic_stream()
-        
         # 启动状态管理器
         self.state_manager.start()
         
@@ -298,7 +294,21 @@ class Agent:
         """状态变化回调"""
         print(f"状态变化: {old_state.name} -> {new_state.name}")
         
-        # 调用外部状态变化回调
+        # 检查是否是用户主动结束会话
+        if not self.is_running:
+            print("用户主动结束会话，直接回到初始状态")
+            # 如果用户主动结束会话，直接返回初始状态，忽略中间状态
+            if self.on_state_change:
+                # 不让中间状态影响 UI，直接跳转到初始状态
+                self.on_state_change("initial")
+            return
+        
+        # 正常状态变化处理
+        # 如果在中断状态下变为 IDLE，不触发 UI 更新，因为这可能是在停止过程中
+        if old_state == ChatState.INTERRUPTED and new_state == ChatState.IDLE:
+            print("从中断状态变为空闲状态，跳过 UI 更新以避免闪烁")
+            return
+            
         if self.on_state_change:
             if new_state == ChatState.IDLE:
                 self.on_state_change("listening")
@@ -307,13 +317,17 @@ class Agent:
             elif new_state == ChatState.AI_SPEAKING:
                 self.on_state_change("speaking")
             elif new_state == ChatState.INTERRUPTED:
-                self.on_state_change("interrupted")
+                # 如果 is_running 已经为 False，则跳过中断状态的 UI 更新
+                if self.is_running:
+                    self.on_state_change("interrupted")
+                else:
+                    print("已停止运行，跳过中断状态的 UI 更新")
     
     def _on_user_interrupt(self, data=None):
         """用户打断事件处理"""
         if self.audio_player.is_playing:
-            print("[打断事件] 执行快速淡出...")
-            self.audio_player.stop_with_fadeout(fadeout_time=0.1)
+            print("[打断事件] 执行立即停止...")
+            self.audio_player.stop_immediately()  # 使用立即停止而不是淡出
             
     def _continuous_speech_detection(self):
         """持续监听语音检测线程，实时监测用户是否开始说话"""
@@ -554,23 +568,32 @@ class Agent:
                 
                 # 处理流式响应
                 for chunk in completion:
+                    # 首先检查是否应该继续运行
+                    if not self.is_running or self.session_end_event.is_set():
+                        print("\n[检测到会话结束信号] 立即停止AI响应")
+                        response_data["interrupted"] = True
+                        # 立即停止播放
+                        if self.audio_player.is_playing:
+                            self.audio_player.stop_immediately()
+                        break
+                    
                     # 检查当前状态是否允许继续处理
                     current_state = self.state_manager.get_state()
                     if current_state in [ChatState.USER_SPEAKING, ChatState.INTERRUPTED]:
                         print(f"\n[当前状态为{current_state.name}，停止AI响应]")
                         response_data["interrupted"] = True
-                        # 使用快速淡出功能
+                        # 立即停止播放
                         if self.audio_player.is_playing:
-                            self.audio_player.stop_with_fadeout(fadeout_time=0.1)
+                            self.audio_player.stop_immediately()
                         break
                     
                     # 检查会话是否已经过期
                     if current_session_id != self.state_manager.get_session_id():
                         print(f"\n[会话{current_session_id}已过期] 停止接收数据")
                         response_data["interrupted"] = True
-                        # 使用快速淡出
+                        # 立即停止播放
                         if self.audio_player.is_playing:
-                            self.audio_player.stop_with_fadeout(fadeout_time=0.1)
+                            self.audio_player.stop_immediately()
                         break
                     
                     # 处理响应内容
@@ -590,13 +613,21 @@ class Agent:
                                     response_data["current_transcript"] += transcript
                             
                             if "data" in delta.audio:
-                                # 再次检查状态
+                                # 再次检查是否应该继续运行
+                                if not self.is_running or self.session_end_event.is_set():
+                                    print("\n[语音块处理中检测到会话结束信号] 立即停止AI响应")
+                                    # 立即停止播放
+                                    if self.audio_player.is_playing:
+                                        self.audio_player.stop_immediately()
+                                    break
+                                
+                                # 检查当前状态
                                 current_state = self.state_manager.get_state()
                                 if current_state in [ChatState.USER_SPEAKING, ChatState.INTERRUPTED]:
                                     print(f"\n[语音块处理中检测到状态为{current_state.name}，停止AI响应]")
-                                    # 使用快速淡出
+                                    # 立即停止播放
                                     if self.audio_player.is_playing:
-                                        self.audio_player.stop_with_fadeout(fadeout_time=0.1)
+                                        self.audio_player.stop_immediately()
                                     break
                                 
                                 # 解码base64数据并处理
@@ -649,12 +680,19 @@ class Agent:
                     wait_start = time.time()
                     
                     while True:
+                        # 首先检查是否应该继续运行
+                        if not self.is_running or self.session_end_event.is_set():
+                            print("\n[等待播放时检测到会话结束信号] 立即停止播放")
+                            # 立即停止播放
+                            self.audio_player.stop_immediately()
+                            break
+                            
                         # 检查当前状态
                         current_state = self.state_manager.get_state()
                         if current_state in [ChatState.USER_SPEAKING, ChatState.INTERRUPTED]:
-                            print(f"\n[等待播放时状态为{current_state.name}，中断播放]")
-                            # 使用快速淡出
-                            self.audio_player.stop_with_fadeout(fadeout_time=0.1)
+                            print(f"\n[等待播放时状态为{current_state.name}，立即中断播放]")
+                            # 立即停止播放
+                            self.audio_player.stop_immediately()
                             break
                         
                         # 检查是否应该继续等待
@@ -778,6 +816,9 @@ class Agent:
         self.session_end_event.clear()
         
         try:
+            # 启动麦克风流
+            print("正在启动麦克风流以进行持续监听...")
+            self.audio_recorder.start_mic_stream()
             # 启动持续语音检测线程
             self.speech_detection_thread = threading.Thread(target=self._continuous_speech_detection)
             self.speech_detection_thread.daemon = True
@@ -823,32 +864,52 @@ class Agent:
         
         try:
             print("正在停止语音对话...")
+            # 立即标记为非运行状态
             self.is_running = False
+            # 设置会话结束事件
             self.session_end_event.set()
             
-            # 发送会话结束事件
+            # 发送事件来切换状态
+            # 首先发送用户打断事件，这会将状态切换为 INTERRUPTED
+            self.state_manager.post_event(SystemEvent.USER_INTERRUPT)
+            # 然后发送会话结束事件
             self.state_manager.post_event(SystemEvent.SESSION_ENDED)
             
-            # 停止音频播放
+            # 立即停止音频播放
             if self.audio_player.is_playing:
+                print("立即停止所有音频播放...")
                 self.audio_player.stop_immediately()
             
-            # 停止麦克风流
-            if self.audio_recorder.is_mic_stream_active():
-                self.audio_recorder.stop_mic_stream()
+            # 无条件停止麦克风流
+            print("停止麦克风流和所有监听线程...")
+            self.audio_recorder.stop_mic_stream()
+            
+            # 等待麦克风流完全停止
+            time.sleep(0.2)
+            
+            # 创建新的会话 ID，确保正在运行的流式响应会被中断
+            with self.state_manager._session_lock:
+                self.state_manager._session_id += 1
+                print(f"创建新的会话 ID: {self.state_manager._session_id}")
             
             # 等待一小段时间，让线程有机会响应
             time.sleep(0.5)
             
-            # 等待线程结束
+            # 强制终止线程
             if self.speech_detection_thread and self.speech_detection_thread.is_alive():
-                self.speech_detection_thread.join(timeout=2.0)
+                print("等待语音检测线程结束...")
+                self.speech_detection_thread.join(timeout=1.0)
             
             if self.ai_thread and self.ai_thread.is_alive():
-                self.ai_thread.join(timeout=2.0)
+                print("等待AI响应线程结束...")
+                self.ai_thread.join(timeout=1.0)
             
             if self.user_thread and self.user_thread.is_alive():
-                self.user_thread.join(timeout=2.0)
+                print("等待用户线程结束...")
+                self.user_thread.join(timeout=1.0)
+                
+            # 清空用户音频缓冲区
+            self.user_audio_buffer = []
             
             # 停止状态管理器
             self.state_manager.stop()

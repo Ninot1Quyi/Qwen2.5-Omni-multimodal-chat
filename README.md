@@ -29,39 +29,39 @@ python app.py
   <img src="https://raw.githubusercontent.com/Ninot1Quyi/Qwen2.5-Omni-multimodal-chat/main/assets/GUI-1.png" width="45%">
   <img src="https://raw.githubusercontent.com/Ninot1Quyi/Qwen2.5-Omni-multimodal-chat/main/assets/GUI-2.png" width="45%">
 </p>
-
-### 命令行模式
-
-1. 使用命令行模式启动：
-```bash
-python app.py --console
-```
-
-2. 选择录音模式：
-   - 动态模式：根据语音活动自动控制录音开始和结束
-3. 开始对话：
-   - 点击"开始"即可语音交流
-   - AI助手会通过语音回答你的问题
-4. 交互功能：
-   - 在AI回答过程中可以直接说话打断
-   - 系统会平滑处理打断并开始新的对话
-
 ## 2 开发计划
 
+**<u>接下来要开发的内容： 完成Agent的Eyes 视觉能力，让它能够看到桌面，并和用户交流</u>**
+
 以下是计划添加的主要功能：
-- [x] 音频通话功能
-  - [x] 交互式音频对话
-  - [x] 打断式音频通话
-- [x] GUI界面
-  - [x] 音频交互动态UI
-  - [x] 可视化对话状态
-- [ ] 视频通话功能
-  - [ ] 实时视频流处理
-  - [ ] 视觉内容理解和分析
-- [ ] 多模态文本对话
-  - [ ] 图文混合输入
-  
-- [ ] MCP (Multi-modal Conversational Perception) 功能
+
+- [ ] Agent架构
+  - [x] **Brain** 与LLM交互 
+    - [ ] 
+
+  - [x] **Ears** 听觉能力
+    - [x] 交互式音频对话
+    - [x] 打断式音频通话
+    - [ ] 语音转文字，兼容Qwen-Omni对同一个输入Massage的模态限制，以更好支持多模态
+
+  - [x] **Mouth **语音能力
+    - [x] 交互式音频对话
+    - [x] 打断式音频通话
+
+  - [ ] **Eyes** 视觉能力
+    - [ ] 通过点击“分享屏幕按钮”观察用户电脑桌面，并给出反馈
+    - [ ] 通过语音交互，自动观察屏幕内容
+    - [ ] 视频通话
+
+  - [x] **Skin** GUI界面
+    - [x] 音频交互动态UI
+    - [x] 可视化对话状态
+
+  - [ ] **Hands** 工作能力
+    - [ ] 简单函数调用
+    - [ ] 引用Qwen-VL来增强鼠标控制能力，可以做一些简单操作
+    - [ ] MCP (Multi-modal Conversational Perception) 功能
+
 
 ## 3 功能特点
 
@@ -194,37 +194,45 @@ uv pip install -r requirements.txt
 
 ```
 Qwen2.5-Omni-multimodal-chat/
-├── app.py                 # 主入口文件，支持GUI和命令行模式
-├── webview_api.py         # pywebview API接口
-├── Agent.py               # 语音聊天核心功能
-├── mouth.py              # 音频播放组件
-├── ears.py               # 音频录制组件
-├── utils.py               # 工具函数库
-├── config.py              # 配置文件
-├── main.py                # 替代入口点
-├── key.json               # API密钥配置（需自行创建）
-├── key.json.example       # API密钥配置示例
-├── requirements.txt       # 依赖库列表
-├── file_version.txt       # 文件版本信息
-├── models/                # 模型目录
-│   └── silero_vad.onnx    # VAD ONNX模型（语音活动检测）
-├── assets/                # 静态资源（图标、截图）
-├── build-scripts/         # 构建脚本
-│   └── windows/           # Windows平台构建
-│       ├── build.py       # 构建Python脚本
-│       ├── build.bat      # 构建批处理文件
+├── app.py             # 主程序入口
+├── Agent.py           # 核心代理类（语音对话管理）
+├── ears.py            # 音频输入处理（麦克风和VAD）
+├── mouth.py           # 音频输出处理（语音合成和播放）
+├── webview_api.py     # WebView API接口
+├── utils.py           # 通用工具函数
+├── config.py          # 配置文件
+├── key.json.example   # API密钥配置示例
+├── pyproject.toml     # Python项目配置
+├── requirements.txt   # 主要依赖列表
+├── uv.lock           # UV包管理器锁文件
+├── LICENSE           # MIT许可证
+├── README.md         # 项目说明文档
+│
+├── assets/           # 资源文件
+│
+├── models/           # 模型文件
+│   └── silero_vad.onnx  # 语音活动检测模型
+│
+├── recordings/       # 录音文件目录（运行时生成）
+│
+├── build-scripts/    # 构建脚本
+│   └── windows/      # Windows平台构建
+│       ├── build.py        # 构建Python脚本
+│       ├── build.bat       # 构建批处理文件
 │       ├── direct_spec.txt # PyInstaller规范文件
-│       └── README.md      # 构建说明
-├── web/                   # GUI前端文件
-│   ├── templates/         # HTML模板
-│   │   └── index.html     # 主界面HTML
-│   └── static/            # 静态资源
-│       ├── css/           # 样式文件
+│       └── README.md       # 构建说明
+│
+├── web/             # GUI前端文件
+│   ├── templates/    # HTML模板
+│   │   └── index.html  # 主界面HTML
+│   └── static/       # 静态资源
+│       ├── css/      # 样式文件
 │       │   └── style.css  # 主样式表
-│       └── js/            # JavaScript文件
-│           └── app.js     # 前端逻辑
-├── build/                 # 构建中间文件（自动生成）
-└── dist/                  # 分发包（自动生成）
+│       └── js/       # JavaScript文件
+│           └── app.js  # 前端逻辑
+│
+├── build/           # 构建中间文件（自动生成）
+└── dist/            # 分发包（自动生成）
 ```
 
 ## 8 注意事项

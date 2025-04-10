@@ -488,7 +488,14 @@ def rename_dist_folder():
     return False
 
 def create_version_file():
-    """创建版本信息文件"""
+    """创建版本信息文件，如果文件已存在则跳过"""
+    version_file = 'file_version.txt'
+    
+    # 检查文件是否已存在
+    if os.path.exists(version_file):
+        print(f"  {version_file} 已存在，跳过创建")
+        return True
+        
     print("创建版本信息文件...")
     version_content = """VSVersionInfo(
   ffi=FixedFileInfo(
@@ -520,7 +527,7 @@ def create_version_file():
 )"""
     
     try:
-        with open('file_version.txt', 'w', encoding='utf-8') as f:
+        with open(version_file, 'w', encoding='utf-8') as f:
             f.write(version_content)
         print("  已创建版本信息文件")
         return True

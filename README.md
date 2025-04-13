@@ -37,7 +37,6 @@ python app.py
 
 - [ ] Agent架构
   - [x] **Brain** 与LLM交互 
-    - [ ] 
 
   - [x] **Ears** 听觉能力
     - [x] 交互式音频对话

@@ -1,59 +1,5 @@
-import base64
-import wave
-import io
-import numpy as np
-import pyaudio
 import platform
-import sys
-import inspect
-import time
 
-def convert_frames_to_wav(frames, p: pyaudio.PyAudio, channels, format, rate):
-    """将音频帧转换为WAV格式字节"""
-    start_time = time.time()
-    
-    print(f"[Utils][DEBUG] 开始转换音频帧，帧数: {len(frames)}")
-    
-    buffer = io.BytesIO()
-    wf = wave.open(buffer, 'wb')
-    wf.setnchannels(channels)
-    wf.setsampwidth(p.get_sample_size(format))
-    wf.setframerate(rate)
-    
-    join_start = time.time()
-    frames_joined = b''.join(frames)
-    join_end = time.time()
-    
-    wf.writeframes(frames_joined)
-    wf.close()
-    
-    result = buffer.getvalue()
-    end_time = time.time()
-    
-    print(f"[Utils][DEBUG] 音频帧转换完成，耗时: {end_time - start_time:.4f} 秒")
-    print(f"[Utils][DEBUG] -- 其中帧合并耗时: {join_end - join_start:.4f} 秒")
-    print(f"[Utils][DEBUG] 转换后WAV大小: {len(result)} 字节")
-    
-    return result
-
-def save_wav_file(filename, frames, p: pyaudio.PyAudio, channels, format, rate):
-    """将音频帧保存为WAV文件"""
-    wf = wave.open(filename, 'wb')
-    wf.setnchannels(channels)
-    wf.setsampwidth(p.get_sample_size(format))
-    wf.setframerate(rate)
-    wf.writeframes(b''.join(frames))
-    wf.close()
-
-def wav_to_base64(wav_bytes):
-    """将WAV字节转换为base64字符串"""
-    if len(wav_bytes) > 44:  # 44是WAV文件头大小
-        return base64.b64encode(wav_bytes).decode("utf-8")
-    return None
-
-def calculate_volume(audio_data):
-    """计算音频数据的音量"""
-    return np.max(np.abs(np.frombuffer(audio_data, dtype=np.int16)))
 
 def apply_windows_compatibility_patches():
     """为Windows平台应用兼容性补丁，解决对象类型比较问题"""
@@ -123,19 +69,19 @@ def monkey_patch_threading_event():
     # 应用补丁
     threading.Event.__eq__ = safe_eq
 
-def safe_compare(obj1, obj2):
-    """安全地比较两个对象，避免类型转换问题"""
-    # 如果其中一个对象是Rectangle类型，返回False
-    if (hasattr(obj1, '__class__') and ('Rectangle' in str(obj1.__class__) or 'System.Drawing' in str(obj1.__class__))) or \
-       (hasattr(obj2, '__class__') and ('Rectangle' in str(obj2.__class__) or 'System.Drawing' in str(obj2.__class__))):
-        return False
+# def safe_compare(obj1, obj2):
+#     """安全地比较两个对象，避免类型转换问题"""
+#     # 如果其中一个对象是Rectangle类型，返回False
+#     if (hasattr(obj1, '__class__') and ('Rectangle' in str(obj1.__class__) or 'System.Drawing' in str(obj1.__class__))) or \
+#        (hasattr(obj2, '__class__') and ('Rectangle' in str(obj2.__class__) or 'System.Drawing' in str(obj2.__class__))):
+#         return False
     
-    # 尝试正常比较
-    try:
-        return obj1 == obj2
-    except (TypeError, Exception):
-        # 类型不兼容时，比较对象标识
-        return obj1 is obj2
+#     # 尝试正常比较
+#     try:
+#         return obj1 == obj2
+#     except (TypeError, Exception):
+#         # 类型不兼容时，比较对象标识
+#         return obj1 is obj2
 
 # 在Windows平台上自动应用补丁
 if platform.system().lower() == 'windows':

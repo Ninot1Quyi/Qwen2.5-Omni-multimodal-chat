@@ -89,10 +89,7 @@ class AgentAPI:
                 self.agent_config[key] = value
                 
         # 如果Agent实例已存在，则更新其配置
-        if self.agent:
-            # 更新配置
-            self.agent.recording_mode = self.agent_config['recording_mode']
-            self.agent.recording_seconds = self.agent_config['recording_seconds']
+        # 注意：当前Agent类不支持这些配置参数
             
         return {"status": "success", "message": "Agent配置已更新"}
     
@@ -109,8 +106,7 @@ class AgentAPI:
             # 初始化Agent实例
             self.agent = Agent(
                 gui_mode=True,
-                recording_mode=self.agent_config['recording_mode'],
-                recording_seconds=self.agent_config['recording_seconds'],
+                debug=self.debug_mode,
                 on_state_change=self.update_status
             )
             

@@ -10,7 +10,6 @@ AUDIO_FORMAT = pyaudio.paInt16
 CHANNELS = 1
 RATE = 16000  # Silero VAD 支持的采样率
 CHUNK = 512   # 32毫秒帧大小 (16000 * 0.032 = 512)，与 Silero VAD 兼容
-RECORD_SECONDS = 5
 
 # API 设置
 try:
@@ -25,10 +24,6 @@ except (FileNotFoundError, json.JSONDecodeError, KeyError) as e:
 
 # VAD 设置
 MIN_SPEECH_DURATION = 0.1
-SPEECH_VOLUME_THRESHOLD = 700
-NORMAL_VOLUME_THRESHOLD = 500
-MIN_POSITIVE_FRAMES = 3
-MIN_NEGATIVE_FRAMES = 20
 
 # 音频播放器设置
 PLAYER_RATE = 24000           # 播放器采样率匹配模型输出

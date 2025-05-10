@@ -7,488 +7,374 @@ import onnxruntime
 import collections
 from config import (
     AUDIO_FORMAT, CHANNELS, RATE, CHUNK,
-    MIN_SPEECH_DURATION, SPEECH_VOLUME_THRESHOLD,
-    NORMAL_VOLUME_THRESHOLD, MIN_POSITIVE_FRAMES,
-    MIN_NEGATIVE_FRAMES
+    MIN_SPEECH_DURATION
 )
-from utils import convert_frames_to_wav, save_wav_file, wav_to_base64
+from core_pipeline import (
+    ProcessorBase, Frame, FrameType, int16_to_float32, frames_to_wav_base64
+)
 
-# ONNX模型的静音判断阈值 - 提高以降低灵敏度
-VAD_THRESHOLD = 0.6  # 从0.5提高到0.6，提高检测阈值
-# 语音结束后缓冲帧数 - 增加帧数提供更长的后置缓冲
-END_BUFFER_FRAMES = 10  # 从1增加到10，约等于0.3秒
-# 调整语音结束临界帧数 - 增加检测帧数
-MIN_NEG_FRAMES_FOR_ENDING = 8  # 从6增加到8帧，需要更多连续静音帧
-# 语音最长持续时间(秒)，超过此时间强制结束
-MAX_SPEECH_DURATION = 180.0  # 最长允许180秒语音
-# 前置缓冲区大小，单位为帧数 - 增加前置缓冲以确保句子开头完整
-PRE_BUFFER_FRAMES = int(1.0 * RATE / CHUNK)  # 从0.5秒增加到1.0秒的前置缓冲
-# 语音确认帧数 - 需要连续检测到多少帧才确认语音开始
-SPEECH_CONFIRM_FRAMES = 2  # 需要连续5帧检测到语音才开始录音
-# 预检测缓冲区大小 - 用于存储可能的语音开始前的数据
-PRE_DETECTION_BUFFER_SIZE = int(2.0 * RATE / CHUNK)  # 2秒的预检测缓冲
+# VAD模型参数
+VAD_THRESHOLD = 0.6  # 语音检测阈值
+END_BUFFER_FRAMES = 10  # 语音结束后缓冲帧数
+MIN_NEG_FRAMES_FOR_ENDING = 8  # 检测结束的连续静音帧数
+MAX_SPEECH_DURATION = 180.0  # 语音最长持续时间(秒)
+PRE_BUFFER_FRAMES = int(1.0 * RATE / CHUNK)  # 预缓冲帧数
+SPEECH_CONFIRM_FRAMES = 2  # 确认语音开始需要的连续帧数
+PRE_DETECTION_BUFFER_SIZE = int(2.0 * RATE / CHUNK)  # 预检测缓冲区大小
 
-class Ears:
-    def __init__(self):
+class Ears(ProcessorBase):
+    """音频输入处理器 - 集成了语音检测和处理功能，直接将处理后的语音发送到AI处理器"""
+    def __init__(self, name="audio_input"):
+        super().__init__(name)
         self.p = pyaudio.PyAudio()
-        self.mic_stream = None
-        self.is_mic_active = False
-        self.mic_lock = threading.Lock()
+        self.stream = None
+        self.vad_model = self._load_vad_model()
         
-        # 初始化 Silero VAD (ONNX版本)
-        model_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "models/silero_vad.onnx")
-        print(f"加载Silero VAD ONNX模型: {model_path}")
-        self.onnx_model = onnxruntime.InferenceSession(model_path)
+        # VAD状态变量
+        self.state = np.zeros((2, 1, 128), dtype=np.float32)
+        self.sr = RATE
         
-        # VAD状态初始化
-        self.reset_vad_state()
+        # 保存音频文件设置
+        self.save_audio_file = True  # 设置为True以保存音频文件
         
-        # 持续监听
-        self.continuous_listening = True
-        self.listening_thread = None
+        # 循环缓冲区
+        self.buffer = collections.deque(maxlen=PRE_DETECTION_BUFFER_SIZE)
         
-        # 长循环缓冲区 - 保存最近180秒的音频数据
-        max_buffer_seconds = MAX_SPEECH_DURATION
-        max_buffer_frames = int(max_buffer_seconds * RATE / CHUNK)
-        self.long_buffer = collections.deque(maxlen=max_buffer_frames)
+        # 语音检测状态
+        self.speech_detected = False
+        self.consecutive_speech_frames = 0
+        self.consecutive_silence_frames = 0
+        self.is_collecting_speech = False
+        self.speech_frames = []
+        self.speech_start_time = None
         
-        # 语音索引记录
-        self.speech_start_index = -1  # 语音开始的索引位置
-        self.speech_end_index = -1    # 语音结束的索引位置
-        self.current_buffer_index = 0 # 当前缓冲区索引位置
-        
-        # 标准预缓冲区（仅用于VAD检测）
-        self.circular_buffer = collections.deque(maxlen=PRE_DETECTION_BUFFER_SIZE)
-        self.mic_data_buffer = []
-        
-        # 语音检测状态变量
-        self.first_speech_frame_index = -1  # 首次检测到语音的帧索引
-        
-        # 语音结束检测参数
-        self.end_silence_frames = 45  # 约1.4秒的静音判定(增加到45)
-        self.end_buffer_frames = END_BUFFER_FRAMES  # 使用新的缓冲帧设置
-        
-        # 事件
+        # 同步锁和事件
+        self.stream_lock = threading.RLock()
         self.speech_detected_event = threading.Event()
         self.speech_ended_event = threading.Event()
     
-    def reset_vad_state(self, batch_size=1):
-        """重置VAD状态"""
-        self.state = np.zeros((2, batch_size, 128), dtype=np.float32)
-        self.context = np.zeros(0, dtype=np.float32)
-        self.sr = RATE
+        print("[Ears] 初始化完成")
     
-    def vad_predict(self, audio_data):
-        """使用ONNX模型进行VAD预测
+    def _load_vad_model(self):
+        """加载VAD模型"""
+        model_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "models/silero_vad.onnx")
+        print(f"加载Silero VAD ONNX模型: {model_path}")
+        return onnxruntime.InferenceSession(model_path)
+    
+    def reset_vad_state(self):
+        """重置VAD状态 - 现在不再需要保持状态"""
+        pass
+    
+    def start_mic_stream(self):
+        """启动麦克风流"""
+        with self.stream_lock:
+            if self.stream is not None:
+                return
+            
+            try:
+                self.stream = self.p.open(
+                    format=AUDIO_FORMAT,
+                    channels=CHANNELS,
+                    rate=RATE,
+                    input=True,
+                    frames_per_buffer=CHUNK,
+                    stream_callback=self._audio_callback
+                )
+                print("[Ears] 麦克风流已启动")
+        
+                # 重置状态
+                self.buffer.clear()
+                self.speech_frames = []
+                self.speech_detected = False
+                self.consecutive_speech_frames = 0
+                self.consecutive_silence_frames = 0
+                self.is_collecting_speech = False
+                self.speech_start_time = None
+                self.speech_detected_event.clear()
+                self.speech_ended_event.clear()
+        
+                # 重置VAD状态
+                self.state = np.zeros((2, 1, 128), dtype=np.float32)
+                
+                return True
+            except Exception as e:
+                print(f"[Ears] 启动麦克风流失败: {e}")
+                return False
+    
+    def _audio_callback(self, in_data, frame_count, time_info, status):
+        """音频回调函数"""
+        if self.is_running:
+            self.enqueue_frame(Frame(
+                FrameType.DATA, 
+                {"audio_data": in_data, "frame_count": frame_count}
+            ))
+        return (None, pyaudio.paContinue)
+    
+    def process_frame(self, frame):
+        """处理音频帧"""
+        if frame.type == FrameType.SYSTEM:
+            cmd = frame.data.get("command")
+            if cmd == "stop":
+                self.stop_mic_stream()
+            elif cmd == "start":
+                # 处理启动命令，启动麦克风流
+                print("[Ears] 收到启动命令，开始启动麦克风流")
+                self.start_mic_stream()
+            return
+        
+        if frame.type == FrameType.DATA and "audio_data" in frame.data:
+            audio_data = frame.data["audio_data"]
+            
+            # 添加到循环缓冲区
+            self.buffer.append(audio_data)
+                    
+            # 转换为numpy数组
+            audio_int16 = np.frombuffer(audio_data, dtype=np.int16)
+            audio_float32 = int16_to_float32(audio_int16)
+            
+            # 检测语音
+            is_speech = self._detect_speech(audio_float32)
+            
+            if is_speech:
+                self.consecutive_speech_frames += 1
+                self.consecutive_silence_frames = 0
+            else:
+                self.consecutive_silence_frames += 1
+                self.consecutive_speech_frames = 0
+            
+            # 语音开始检测
+            if not self.speech_detected and self.consecutive_speech_frames >= SPEECH_CONFIRM_FRAMES:
+                self.speech_detected = True
+                self.is_collecting_speech = True
+                self.speech_start_time = time.time()
+                self.speech_frames = list(self.buffer)  # 复制预缓冲区内容
+                
+                # 发送语音开始事件
+                self.speech_detected_event.set()
+                            
+                # 发送用户打断系统事件帧到下游处理器
+                print("[Ears] 检测到用户开始说话，发送用户打断事件到下游处理器")
+                self.send_downstream(Frame(
+                    FrameType.SYSTEM,
+                    {"event": "user_interrupt", "command": "clear_pipeline"}
+                ))
+                
+                # 通知下游
+                self.send_downstream(Frame(
+                    FrameType.SYSTEM,
+                    {"event": "speech_started"}
+                ))
+                print("[Ears] 检测到语音开始")
+                        
+            # 收集语音帧
+            if self.is_collecting_speech:
+                self.speech_frames.append(audio_data)
+                                
+                # 检查超时
+                if self.speech_start_time and (time.time() - self.speech_start_time) > MAX_SPEECH_DURATION:
+                    print(f"[Ears] 语音时长超过最大限制 {MAX_SPEECH_DURATION}秒，强制结束")
+                    self._end_speech_collection()
+                    return
+                
+                # 检查语音结束
+                if self.consecutive_silence_frames >= MIN_NEG_FRAMES_FOR_ENDING:
+                    # 添加额外的缓冲帧
+                    buffer_count = 0
+                    while buffer_count < END_BUFFER_FRAMES and self.is_collecting_speech:
+                        buffer_count += 1
+                        
+                        if buffer_count >= END_BUFFER_FRAMES:
+                            self._end_speech_collection()
+    
+    def _end_speech_collection(self):
+        """结束语音收集并将音频发送到AI处理器"""
+        if not self.is_collecting_speech:
+            return
+            
+        self.is_collecting_speech = False
+        self.speech_detected = False
+        
+        # 收集的语音转为base64
+        if self.speech_frames:
+            # 处理完整的语音帧
+            try:
+                audio_base64 = self._convert_frames_to_base64(self.speech_frames)
+                print(f"[Ears] 语音转换为base64完成，长度: {len(audio_base64)}")
+                
+                # 如果启用了保存音频功能，则保存音频文件
+                if self.save_audio_file:
+                    self._save_audio_to_file(self.speech_frames, audio_base64)
+            
+                # 发送语音结束事件
+                self.speech_ended_event.set()
+                                
+                # 直接发送到AI处理器
+                try:
+                    self.send_downstream(Frame(
+                        FrameType.SYSTEM,
+                        {
+                            "event": "speech_ready", 
+                            "audio_base64": audio_base64,
+                            "speech_frames": self.speech_frames
+                        }
+                    ))
+                    print(f"[Ears] 语音数据已发送到AI处理器，帧数: {len(self.speech_frames)}")
+                except Exception as e:
+                    print(f"[Ears] 发送语音数据到AI处理器失败: {e}")
+                
+                speech_duration = time.time() - self.speech_start_time if self.speech_start_time else 0
+                print(f"[Ears] 语音结束，持续时间: {speech_duration:.2f}秒")
+            except Exception as e:
+                print(f"[Ears] 处理语音时出错: {e}")
+        
+        # 重置状态
+        self.consecutive_speech_frames = 0
+        self.consecutive_silence_frames = 0
+        self.speech_start_time = None
+        self.speech_frames = []
+    
+    def _convert_frames_to_base64(self, frames):
+        """将音频帧转换为base64编码的WAV数据"""
+        try:
+            result = frames_to_wav_base64(
+                frames, 
+                CHANNELS, 
+                self.p.get_sample_size(AUDIO_FORMAT), 
+                RATE
+            )
+            return result
+        except Exception as e:
+            print(f"[Ears] 转换音频帧到base64失败: {e}")
+            raise
+
+    def _detect_speech(self, audio_float32):
+        """使用VAD模型检测语音
+        基于 Silero VAD ONNX 模型
         
         Args:
-            audio_data: 浮点音频数据 [-1.0, 1.0]
-            
+            audio_float32: 输入音频帧 (float32 格式)
+        
         Returns:
             bool: 是否检测到语音
         """
-        # 确保输入形状正确 (固定为512采样点，适用于16kHz采样率)
-        if len(audio_data) != 512:
-            print(f"警告: 音频样本数量 {len(audio_data)} 不为512，结果可能不正确")
+        try:
+            # 确保输入形状正确 (Silero VAD 默认需要 512 采样点)
+            if len(audio_float32) != 512:
+                # 如果不是512点，进行补零或截断
+                if len(audio_float32) < 512:
+                    # 补零
+                    padded = np.zeros(512, dtype=np.float32)
+                    padded[:len(audio_float32)] = audio_float32
+                    audio_float32 = padded
+                else:
+                    # 取前512点
+                    audio_float32 = audio_float32[:512]
+            
+            # 重塑输入为模型期望的形状 [1, 512]
+            audio = np.array(audio_float32, dtype=np.float32).reshape(1, -1)
+            
+            # 准备ONNX输入
+            ort_inputs = {
+                "input": audio,
+                "state": self.state,  # 使用当前状态
+                "sr": np.array(self.sr, dtype=np.int64)  # 添加采样率
+            }
+            
+            # 运行ONNX推理
+            ort_outs = self.vad_model.run(None, ort_inputs)
+            
+            # 更新状态
+            if len(ort_outs) > 1:
+                self.state = ort_outs[1]
+            
+            # 获取语音概率 - 第一个输出是语音概率
+            speech_prob = ort_outs[0].item()  # 语音概率
+            
+            # 使用阈值判断是否为语音
+            return speech_prob >= VAD_THRESHOLD
+            
+        except Exception as e:
+            print(f"[Ears] VAD检测出错: {e}")
+            return False
+    
+    def stop_mic_stream(self):
+        """停止麦克风流"""
+        print("[Ears] 停止麦克风流")
         
-        # 重塑输入为模型期望的形状 [batch_size, seq_len]
-        audio = np.array(audio_data, dtype=np.float32).reshape(1, -1)
-        
-        # 准备ONNX输入
-        ort_inputs = {
-            "input": audio,
-            "state": self.state,  # 使用当前状态
-            "sr": np.array(self.sr, dtype=np.int64)  # 添加采样率
-        }
-        
-        # 运行推理
-        ort_outs = self.onnx_model.run(None, ort_inputs)
-        
-        # 更新状态，返回格式为 [out, state]
-        out, self.state = ort_outs
-        
-        # 返回预测结果: [batch_size, 1] -> 标量值
-        return out[0][0] > VAD_THRESHOLD  # 使用全局阈值
+        with self.stream_lock:
+            if self.stream is None:
+                return
+                
+            try:
+                # 结束当前语音收集
+                if self.is_collecting_speech:
+                    self._end_speech_collection()
+                
+                # 停止音频流
+                self.stream.stop_stream()
+                self.stream.close()
+                self.stream = None
+                
+                print("[Ears] 麦克风流已安全停止")
+                return True
+            except Exception as e:
+                print(f"[Ears] 停止麦克风流时出错: {e}")
+                return False
     
     def get_available_microphones(self):
         """获取可用麦克风列表"""
         mics = []
-        for i in range(self.p.get_device_count()):
-            dev_info = self.p.get_device_info_by_index(i)
-            if dev_info.get('maxInputChannels') > 0:
+        info = self.p.get_host_api_info_by_index(0)
+        numdevices = info.get('deviceCount')
+        
+        for i in range(numdevices):
+            device_info = self.p.get_device_info_by_host_api_device_index(0, i)
+            if device_info.get('maxInputChannels') > 0:
                 mics.append({
                     'index': i,
-                    'name': dev_info.get('name'),
-                    'channels': dev_info.get('maxInputChannels'),
-                    'sample_rate': dev_info.get('defaultSampleRate')
+                    'name': device_info.get('name'),
+                    'channels': device_info.get('maxInputChannels')
                 })
+        
         return mics
     
-    def start_mic_stream(self):
-        """启动麦克风流进行持续监听"""
-        with self.mic_lock:
-            if not self.is_mic_active:
-                try:
-                    self.mic_stream = self.p.open(
-                        format=AUDIO_FORMAT,
-                        channels=CHANNELS,
-                        rate=RATE,
-                        input=True,
-                        frames_per_buffer=CHUNK
-                    )
-                    self.is_mic_active = True
-                    print("麦克风流已启动")
-                    
-                    # 重置索引和缓冲区
-                    self.long_buffer.clear()
-                    self.circular_buffer.clear()
-                    self.current_buffer_index = 0
-                    self.speech_start_index = -1
-                    self.speech_end_index = -1
-                    self.first_speech_frame_index = -1
-                    
-                    if self.continuous_listening and (self.listening_thread is None or not self.listening_thread.is_alive()):
-                        self.listening_thread = threading.Thread(target=self._continuous_listening_thread)
-                        self.listening_thread.daemon = True
-                        self.listening_thread.start()
-                        print("后台持续监听已启动")
-                except Exception as e:
-                    print(f"启动麦克风流失败: {e}")
-    
-    def stop_mic_stream(self):
-        """停止麦克风流和所有监听线程"""
-        print("开始停止麦克风流和所有监听线程...")
-        
-        # 首先停止持续监听标志
-        self.continuous_listening = False
-        
-        with self.mic_lock:
-            # 无论状态如何，都尝试停止麦克风流
-            self.is_mic_active = False
-            
-            if self.mic_stream:
-                try:
-                    print("停止麦克风流...")
-                    self.mic_stream.stop_stream()
-                    self.mic_stream.close()
-                    self.mic_stream = None
-                    print("麦克风流已安全停止")
-                except Exception as e:
-                    print(f"停止麦克风流时出错: {e}")
-                    self.mic_stream = None
-        
-        # 等待监听线程结束
-        if self.listening_thread and self.listening_thread.is_alive():
-            print("等待监听线程结束...")
-            try:
-                self.listening_thread.join(timeout=1.0)
-                if not self.listening_thread.is_alive():
-                    print("监听线程已结束")
-                else:
-                    print("监听线程未能在超时时间内结束，但已设置停止标志")
-            except Exception as e:
-                print(f"等待监听线程结束时出错: {e}")
-        
-        # 重置状态
-        self.reset_vad_state()
-        self.speech_detected_event.clear()
-        self.speech_ended_event.clear()
-    
     def is_mic_stream_active(self):
-        """检查麦克风流是否已启动
-        
-        Returns:
-            bool: 麦克风流是否处于活动状态
-        """
-        with self.mic_lock:
-            return self.is_mic_active and self.mic_stream is not None
-    
-    def _continuous_listening_thread(self):
-        """后台持续监听线程"""
-        print("持续监听线程已启动")
-        speech_start_time = None
-        consecutive_silence_count = 0
-        vad_positive_frames = 0
-        vad_negative_frames = 0
-        end_buffer_count = 0
-        is_ending = False
-        # 记录当检测到可能结束时的索引
-        potential_end_index = -1
-        
-        self.circular_buffer.clear()
-        self.mic_data_buffer = []
-        
-        self.speech_detected_event.clear()
-        self.speech_ended_event.clear()
-        
-        # 重置VAD状态
-        self.reset_vad_state()
-        
-        try:
-            while self.continuous_listening and self.is_mic_active:
-                try:
-                    if self.mic_stream is None:
-                        print("麦克风流无效，尝试重新启动...")
-                        time.sleep(0.01)
-                        continue
-                    
-                    # 读取音频数据
-                    data = self.mic_stream.read(CHUNK, exception_on_overflow=False)
-                    
-                    # 添加到长循环缓冲区
-                    with self.mic_lock:
-                        self.long_buffer.append(data)
-                        self.current_buffer_index += 1
-                    
-                    # 始终维护预缓冲区，无论是否已开始录音
-                    self.circular_buffer.append(data)
-                    
-                    # 将音频数据转换为int16格式
-                    audio_int16 = np.frombuffer(data, dtype=np.int16)
-                    
-                    # 转换为浮点数据 [-1, 1]
-                    audio_float32 = audio_int16.astype(np.float32) / 32768.0
-                    
-                    # 使用ONNX模型进行语音检测
-                    is_speech_vad = self.vad_predict(audio_float32)
-                    
-                    # 检测到第一帧语音时记录索引
-                    if is_speech_vad and self.first_speech_frame_index == -1 and speech_start_time is None:
-                        self.first_speech_frame_index = self.current_buffer_index
-                        print(f"[首帧检测] 检测到首个语音帧，索引: {self.first_speech_frame_index}")
-                    
-                    # 更新语音检测帧计数
-                    if is_speech_vad:
-                        vad_positive_frames += 1
-                        vad_negative_frames = 0
-                        if is_ending:  # 如果检测到新的语音，重置结束状态
-                            is_ending = False
-                            end_buffer_count = 0
-                            potential_end_index = -1
-                            print("检测到新的语音，取消结束确认")
-                    else:
-                        vad_negative_frames += 1
-                        vad_positive_frames = 0
-                        if speech_start_time is not None:
-                            consecutive_silence_count += 1
-                    
-                    # 仅使用VAD结果确定语音状态
-                    is_speech = vad_positive_frames >= SPEECH_CONFIRM_FRAMES
-                    
-                    current_time = time.time()
-                    
-                    # 如果已经开始录音，检查是否超时
-                    if speech_start_time is not None:
-                        speech_duration = current_time - speech_start_time
-                        if speech_duration > MAX_SPEECH_DURATION:
-                            print(f"语音时长超过最大限制 {MAX_SPEECH_DURATION}秒，强制结束")
-                            
-                            # 记录结束索引
-                            with self.mic_lock:
-                                self.speech_end_index = self.current_buffer_index
-                                
-                            self.speech_ended_event.set()
-                            
-                            # 重置所有状态
-                            speech_start_time = None
-                            is_ending = False
-                            end_buffer_count = 0
-                            vad_positive_frames = 0
-                            vad_negative_frames = 0
-                            consecutive_silence_count = 0
-                            potential_end_index = -1
-                            self.first_speech_frame_index = -1
-                            self.reset_vad_state()
-                            continue
-                    
-                    # 语音开始检测 - 需要连续多帧检测到语音
-                    if is_speech and speech_start_time is None:
-                        speech_start_time = current_time
-                        print(f"检测到语音，开始录音...")
-                        
-                        # 记录语音开始索引 (从首次检测到语音的帧往前算)
-                        with self.mic_lock:
-                            # 确定语音真正的开始点
-                            if self.first_speech_frame_index > 0:
-                                # 从首次检测到语音的帧往前确定更大的前置缓冲
-                                actual_pre_buffer = min(
-                                    PRE_BUFFER_FRAMES,  # 不超过预设的最大前置缓冲
-                                    self.current_buffer_index - self.first_speech_frame_index + SPEECH_CONFIRM_FRAMES  # 加上确认帧数
-                                )
-                                
-                                # 计算实际的开始索引，从首次检测到语音的帧再往前推
-                                self.speech_start_index = max(0, self.first_speech_frame_index - actual_pre_buffer)
-                            else:
-                                # 如果没有记录到首帧，使用当前索引减去前置缓冲
-                                self.speech_start_index = max(0, self.current_buffer_index - PRE_BUFFER_FRAMES)
-                                
-                            print(f"记录语音开始索引: {self.speech_start_index} (首帧索引: {self.first_speech_frame_index}, 当前索引: {self.current_buffer_index})")
-                        
-                        self.speech_detected_event.set()
-                        consecutive_silence_count = 0  # 重置静音计数
-                        
-                    # 语音结束检测
-                    elif speech_start_time is not None:
-                        # 检查是否进入结束状态 - 使用更长的静音判定
-                        if not is_ending and (vad_negative_frames >= MIN_NEG_FRAMES_FOR_ENDING or consecutive_silence_count >= self.end_silence_frames):
-                            is_ending = True
-                            end_buffer_count = 0
-                            # 记录可能的结束位置 - 这是检测到静音开始的位置
-                            potential_end_index = self.current_buffer_index
-                            speech_duration = current_time - speech_start_time
-                            print(f"检测到可能的语音结束，等待确认... [负帧:{vad_negative_frames}, 静音:{consecutive_silence_count}, 时长:{speech_duration:.2f}s]")
-                        
-                        # 在结束状态下累积额外的缓冲帧
-                        if is_ending:
-                            end_buffer_count += 1
-                            
-                            # 直接输出调试信息，每帧都输出，确保看到计数变化
-                            print(f"[确认中] 缓冲帧:{end_buffer_count}/{self.end_buffer_frames}, 静音帧:{consecutive_silence_count}, 负帧:{vad_negative_frames}")
-                            
-                            # 积累足够的后置缓冲帧后确认语音结束
-                            if end_buffer_count >= self.end_buffer_frames:
-                                speech_duration = current_time - speech_start_time
-                                
-                                # 确认语音结束
-                                print(f"语音结束，持续时间: {speech_duration:.2f}秒")
-                                
-                                # 记录语音结束索引
-                                with self.mic_lock:
-                                    if potential_end_index > 0:
-                                        # 使用检测到静音开始的位置作为结束索引，而不是当前位置
-                                        # 这样可以避免录入结束后的杂音
-                                        self.speech_end_index = potential_end_index
-                                    else:
-                                        # 如果没有记录到可能的结束位置，使用当前位置
-                                        self.speech_end_index = self.current_buffer_index
-                                    print(f"记录语音结束索引: {self.speech_end_index}")
-                                
-                                self.speech_ended_event.set()
-                                
-                                # 重置所有状态
-                                speech_start_time = None
-                                is_ending = False
-                                end_buffer_count = 0
-                                vad_positive_frames = 0
-                                vad_negative_frames = 0
-                                consecutive_silence_count = 0
-                                potential_end_index = -1
-                                self.first_speech_frame_index = -1  # 重置首帧检测
-                                self.reset_vad_state()  # 重置VAD状态
-                    
-                except OSError as e:
-                    print(f"读取麦克风数据时出错: {e}")
-                    time.sleep(0.2)
-                except Exception as e:
-                    print(f"持续监听线程错误: {e}")
-                    time.sleep(0.2)
-                    
-        except Exception as e:
-            print(f"持续监听线程异常终止: {e}")
-        finally:
-            print("持续监听线程已退出")
-
-    def get_speech_frames(self):
-        """获取语音片段的音频帧
-        
-        Returns:
-            list: 语音音频帧列表
-        """
-        if self.speech_start_index < 0 or self.speech_end_index < 0:
-            print("语音索引无效，无法获取语音帧")
-            return []
-            
-        with self.mic_lock:
-            # 计算长循环缓冲区的当前大小
-            buffer_size = len(self.long_buffer)
-            
-            # 如果没有足够的数据，返回空列表
-            if buffer_size == 0:
-                return []
-            
-            # 计算实际的开始和结束位置
-            # 由于使用了collections.deque，我们需要转换为相对索引
-            relative_start = (self.speech_start_index - self.current_buffer_index + buffer_size) % buffer_size
-            relative_end = (self.speech_end_index - self.current_buffer_index + buffer_size) % buffer_size
-            
-            print(f"相对索引 - 开始: {relative_start}, 结束: {relative_end}, 缓冲区大小: {buffer_size}")
-            
-            # 收集帧数据
-            frames = []
-            
-            # 处理两种情况: 1) 开始位置在结束位置之前，2) 开始位置在结束位置之后（环绕情况）
-            if relative_start <= relative_end:
-                # 简单情况: 直接获取中间的片段
-                frames = list(self.long_buffer)[relative_start:relative_end]
-            else:
-                # 环绕情况: 需要获取两个部分并连接起来
-                end_frames = list(self.long_buffer)[relative_start:]
-                start_frames = list(self.long_buffer)[:relative_end]
-                frames = end_frames + start_frames
-            
-            print(f"获取到语音帧: {len(frames)}帧")
-            return frames
-    
-    def record_until_silence(self, temp_file="temp_audio.wav"):
-        """录音直到检测到静音"""
-        print("[ears]等待语音输入...")
-        max_wait_time = 60
-        
-        self.speech_detected_event.clear()
-        self.speech_ended_event.clear()
-        self.speech_start_index = -1
-        self.speech_end_index = -1
-        self.first_speech_frame_index = -1  # 重置首帧检测
-        
-        try:
-            print("等待检测到语音...")
-            speech_detected = self.speech_detected_event.wait(timeout=max_wait_time)
-            
-            if not speech_detected:
-                print("等待语音超时")
-                return None, None
-            
-            print("检测到语音，正在录音...")
-            
-            print("录音中，等待语音结束...")
-            speech_ended = self.speech_ended_event.wait(timeout=max_wait_time)
-            
-            if not speech_ended:
-                print(f"等待语音结束超时({max_wait_time}秒)，强制停止")
-                # 如果是超时，手动设置结束索引
-                with self.mic_lock:
-                    if self.speech_end_index < 0:
-                        self.speech_end_index = self.current_buffer_index
-            else:
-                print("检测到语音结束，停止录音")
-            
-            # 获取完整语音帧
-            recording_data = self.get_speech_frames()
-            
-            if recording_data:
-                audio_duration = len(recording_data) * CHUNK / RATE
-                print(f"录音完成，音频长度: {audio_duration:.2f}秒，帧数: {len(recording_data)}")
-                
-                # 转换为WAV格式
-                wav_bytes = convert_frames_to_wav(recording_data, self.p, CHANNELS, AUDIO_FORMAT, RATE)
-                base64_audio = wav_to_base64(wav_bytes)
-                
-                # 保存到文件
-                # save_wav_file(temp_file, recording_data, self.p, CHANNELS, AUDIO_FORMAT, RATE)
-                
-                return base64_audio, temp_file
-            else:
-                print("未收集到有效的音频数据")
-                return None, None
-                
-        except Exception as e:
-            print(f"动态录音过程中出错: {e}")
-            return None, None
+        """检查麦克风流是否活跃"""
+        with self.stream_lock:
+            return self.stream is not None and self.stream.is_active()
     
     def close(self):
-        """关闭并清理资源"""
+        """关闭资源"""
         self.stop_mic_stream()
-        try:
+        if self.p:
             self.p.terminate()
+
+    def _save_audio_to_file(self, frames, base64_data=None):
+        """保存音频帧到文件
+        
+        Args:
+            frames: 音频帧列表
+            base64_data: 可选的base64编码的音频数据
+        """
+        try:
+            # 确保目录存在
+            save_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "audio_record_tmp")
+            os.makedirs(save_dir, exist_ok=True)
+            
+            # 创建时间戳文件名
+            timestamp = time.strftime("%Y%m%d_%H%M%S", time.localtime())
+            file_path = os.path.join(save_dir, f"audio_{timestamp}.wav")
+            
+            # 保存原始帧到WAV文件
+            import wave
+            with wave.open(file_path, 'wb') as wf:
+                wf.setnchannels(CHANNELS)
+                wf.setsampwidth(self.p.get_sample_size(AUDIO_FORMAT))
+                wf.setframerate(RATE)
+                wf.writeframes(b''.join(frames))
+                
+            print(f"[Ears] 音频已保存到: {file_path}")
+            return file_path
         except Exception as e:
-            print(f"终止PyAudio时出错(已忽略): {e}")
+            print(f"[Ears] 保存音频文件失败: {e}")
+            return None

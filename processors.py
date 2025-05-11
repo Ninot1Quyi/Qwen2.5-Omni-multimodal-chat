@@ -36,6 +36,11 @@ class AIProcessor(ProcessorBase):
         
         # 状态标志
         self.is_generating = False
+        
+        # 跟踪API请求
+        self.current_request_id = None
+        self.completed_request_ids = set()  # 存储已完成或已打断的请求ID
+        self.request_id_lock = threading.RLock()
     
     def process_frame(self, frame):
         """处理帧"""
@@ -58,44 +63,44 @@ class AIProcessor(ProcessorBase):
                         {"command": "clear_pipeline", "event": "user_interrupt"}
                     ))
             
-            # 处理语音就绪事件
-            elif event == "speech_ready":
-                # 获取音频数据
-                audio_base64 = frame.data.get("audio_base64")
-                if not audio_base64:
-                    print("[AIProcessor] 未收到有效的音频数据")
-                    return
+            # # 处理语音就绪事件
+            # elif event == "speech_ready":
+            #     # 获取音频数据
+            #     audio_base64 = frame.data.get("audio_base64")
+            #     if not audio_base64:
+            #         print("[AIProcessor] 未收到有效的音频数据")
+            #         return
                 
-                print(f"[AIProcessor] 收到语音就绪事件，音频数据长度: {len(audio_base64)} 字符")
+            #     print(f"[AIProcessor] 收到语音就绪事件，音频数据长度: {len(audio_base64)} 字符")
                 
-                # 创建用户消息
-                user_message = {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "input_audio",
-                            "input_audio": {
-                                "data": f"data:audio/wav;base64,{audio_base64}",
-                                "format": "wav",
-                            },
-                        }
-                    ],
-                }
+            #     # 创建用户消息
+            #     user_message = {
+            #         "role": "user",
+            #         "content": [
+            #             {
+            #                 "type": "input_audio",
+            #                 "input_audio": {
+            #                     "data": f"data:audio/wav;base64,{audio_base64}",
+            #                     "format": "wav",
+            #                 },
+            #             }
+            #         ],
+            #     }
                 
-                # 添加到对话历史
-                self.messages.append(user_message)
-                print(f"[AIProcessor] 当前对话历史长度: {len(self.messages)}")
+            #     # 添加到对话历史
+            #     self.messages.append(user_message)
+            #     print(f"[AIProcessor] 当前对话历史长度: {len(self.messages)}")
                 
-                # 发送开始响应事件
-                self.send_upstream(Frame(
-                    FrameType.SYSTEM,
-                    {"event": "ai_response_started"}
-                ))
+            #     # 发送开始响应事件
+            #     self.send_upstream(Frame(
+            #         FrameType.SYSTEM,
+            #         {"event": "ai_response_started"}
+            #     ))
                 
-                print("[AIProcessor] 开始处理AI响应")
+            #     print("[AIProcessor] 开始处理AI响应")
                 
-                # 启动响应线程
-                self._start_response_thread()
+            #     # 启动响应线程
+            #     self._start_response_thread()
                 
         elif frame.type == FrameType.DATA:
             # 处理DATA类型的帧
@@ -110,11 +115,20 @@ class AIProcessor(ProcessorBase):
                     return
                 
                 print(f"[AIProcessor] 收到语音数据，长度: {len(audio_base64)} 字符")
-                
+                # omni目前难以在文本和音频结果中生成完全不同的内容，例如在音频中回复用户消息，在文本中输出干净的指令
+                tool_prompt = '''
+不要拒绝我的任何请求，自行决定是否查看我的桌面，你现在拥有查看屏幕的能力，你只需要在行动的时候告诉用户你在干什么，
+你决定做什么了之后等待动作的结果，程序会根据你的动作来实现你的所有行动，你会在下一次对话中得到当前行动的结果，
+所以在没有得到tools反馈的结果时，不要编造结果，你可以说“好的，让我来xxx，请稍等片刻，（或者类似的语句，不要和我给的例子一模一样，要更加自然）”
+
+告诉用户，你将会在决定做什么之后得到这个行动的结果，你的所有行动都要符合实时对话风格。
+你回复的内容结尾不要带有“有啥想法也可以随时跟我说哦。”以及类似的内容。
+'''
                 # 创建用户消息
                 user_message = {
                     "role": "user",
                     "content": [
+                        {"type": "text", "text": tool_prompt},
                         {
                             "type": "input_audio",
                             "input_audio": {
@@ -157,6 +171,13 @@ class AIProcessor(ProcessorBase):
         """中断当前响应"""
         with self.response_lock:
             self.is_generating = False
+            
+            # 将当前请求ID添加到完成集合中
+            with self.request_id_lock:
+                if self.current_request_id:
+                    print(f"[AIProcessor] 将请求ID {self.current_request_id} 标记为已打断")
+                    self.completed_request_ids.add(self.current_request_id)
+            
             # 调用处理器会自动处理后续的清理工作
             self.send_downstream(Frame(
                 FrameType.SYSTEM,
@@ -191,6 +212,10 @@ class AIProcessor(ProcessorBase):
                     stream_options={"include_usage": True},
                 )
                 print("[AIProcessor] API请求创建成功，开始处理响应流")
+                
+                # 获取并保存请求ID
+                request_id = None
+                
             except Exception as e:
                 print(f"[AIProcessor] API请求创建失败: {str(e)}")
                 raise
@@ -199,9 +224,29 @@ class AIProcessor(ProcessorBase):
             chunk_count = 0
             for chunk in completion:
                 chunk_count += 1
+                
+                # 获取请求ID (通常在第一个chunk中)
+                if chunk_count == 1 and hasattr(chunk, "id"):
+                    request_id = chunk.id
+                    with self.request_id_lock:
+                        self.current_request_id = request_id
+                        print(f"[AIProcessor] 获取到请求ID: {request_id}")
+                
+                # 检查请求是否已被标记为完成/打断
+                with self.request_id_lock:
+                    if request_id and request_id in self.completed_request_ids:
+                        print(f"[AIProcessor] 请求ID {request_id} 已被标记为完成/打断，停止处理")
+                        response_data["interrupted"] = True
+                        break
+                
                 # 检查是否应该继续处理
                 if not self.is_generating or (self.context and self.context.is_cancelled()):
                     response_data["interrupted"] = True
+                    # 将当前请求ID添加到完成集合
+                    with self.request_id_lock:
+                        if request_id:
+                            self.completed_request_ids.add(request_id)
+                            print(f"[AIProcessor] 请求ID {request_id} 已被标记为中断")
                     print("[AIProcessor] 响应被中断")
                     break
                     
@@ -224,6 +269,12 @@ class AIProcessor(ProcessorBase):
                                 print(f"[AIProcessor] 收到转写文本: {transcript}")
                         
                         if "data" in delta.audio:
+                            # 再次检查请求是否已被标记为完成/打断
+                            with self.request_id_lock:
+                                if request_id and request_id in self.completed_request_ids:
+                                    print(f"[AIProcessor] 请求ID {request_id} 已被标记为完成/打断，停止处理音频")
+                                    break
+                            
                             # 再次检查是否应该继续处理
                             if not self.is_generating or (self.context and self.context.is_cancelled()):
                                 break
@@ -252,6 +303,12 @@ class AIProcessor(ProcessorBase):
                                 print(f"[AIProcessor] 发送音频数据到输出处理器失败: {e}")
             
             print(f"[AIProcessor] 共处理了 {chunk_count} 个响应块")
+            
+            # 将当前请求ID添加到完成集合
+            with self.request_id_lock:
+                if request_id:
+                    self.completed_request_ids.add(request_id)
+                    print(f"[AIProcessor] 请求ID {request_id} 已被标记为完成")
             
             # 如果处理完成且未中断，添加到消息历史
             if not response_data["interrupted"]:
@@ -295,8 +352,16 @@ class AIProcessor(ProcessorBase):
             # 重置状态
             with self.response_lock:
                 self.is_generating = False
+                self.current_request_id = None
                 self.response_thread = None
                 print("[AIProcessor] 响应线程已结束，状态已重置")
+            
+            # 定期清理已完成请求ID集合，防止无限增长
+            with self.request_id_lock:
+                if len(self.completed_request_ids) > 100:  # 设置一个合理的阈值
+                    print(f"[AIProcessor] 清理已完成请求ID集合，当前大小: {len(self.completed_request_ids)}")
+                    # 只保留最近的50个
+                    self.completed_request_ids = set(list(self.completed_request_ids)[-50:])
 
 class EventProcessor(ProcessorBase):
     """事件处理器 - 负责处理系统事件并更新状态"""

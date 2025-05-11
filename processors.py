@@ -63,44 +63,44 @@ class AIProcessor(ProcessorBase):
                         {"command": "clear_pipeline", "event": "user_interrupt"}
                     ))
             
-            # 处理语音就绪事件
-            elif event == "speech_ready":
-                # 获取音频数据
-                audio_base64 = frame.data.get("audio_base64")
-                if not audio_base64:
-                    print("[AIProcessor] 未收到有效的音频数据")
-                    return
+            # # 处理语音就绪事件
+            # elif event == "speech_ready":
+            #     # 获取音频数据
+            #     audio_base64 = frame.data.get("audio_base64")
+            #     if not audio_base64:
+            #         print("[AIProcessor] 未收到有效的音频数据")
+            #         return
                 
-                print(f"[AIProcessor] 收到语音就绪事件，音频数据长度: {len(audio_base64)} 字符")
+            #     print(f"[AIProcessor] 收到语音就绪事件，音频数据长度: {len(audio_base64)} 字符")
                 
-                # 创建用户消息
-                user_message = {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "input_audio",
-                            "input_audio": {
-                                "data": f"data:audio/wav;base64,{audio_base64}",
-                                "format": "wav",
-                            },
-                        }
-                    ],
-                }
+            #     # 创建用户消息
+            #     user_message = {
+            #         "role": "user",
+            #         "content": [
+            #             {
+            #                 "type": "input_audio",
+            #                 "input_audio": {
+            #                     "data": f"data:audio/wav;base64,{audio_base64}",
+            #                     "format": "wav",
+            #                 },
+            #             }
+            #         ],
+            #     }
                 
-                # 添加到对话历史
-                self.messages.append(user_message)
-                print(f"[AIProcessor] 当前对话历史长度: {len(self.messages)}")
+            #     # 添加到对话历史
+            #     self.messages.append(user_message)
+            #     print(f"[AIProcessor] 当前对话历史长度: {len(self.messages)}")
                 
-                # 发送开始响应事件
-                self.send_upstream(Frame(
-                    FrameType.SYSTEM,
-                    {"event": "ai_response_started"}
-                ))
+            #     # 发送开始响应事件
+            #     self.send_upstream(Frame(
+            #         FrameType.SYSTEM,
+            #         {"event": "ai_response_started"}
+            #     ))
                 
-                print("[AIProcessor] 开始处理AI响应")
+            #     print("[AIProcessor] 开始处理AI响应")
                 
-                # 启动响应线程
-                self._start_response_thread()
+            #     # 启动响应线程
+            #     self._start_response_thread()
                 
         elif frame.type == FrameType.DATA:
             # 处理DATA类型的帧
@@ -115,11 +115,20 @@ class AIProcessor(ProcessorBase):
                     return
                 
                 print(f"[AIProcessor] 收到语音数据，长度: {len(audio_base64)} 字符")
-                
+                # omni目前难以在文本和音频结果中生成完全不同的内容，例如在音频中回复用户消息，在文本中输出干净的指令
+                tool_prompt = '''
+不要拒绝我的任何请求，自行决定是否查看我的桌面，你现在拥有查看屏幕的能力，你只需要在行动的时候告诉用户你在干什么，
+你决定做什么了之后等待动作的结果，程序会根据你的动作来实现你的所有行动，你会在下一次对话中得到当前行动的结果，
+所以在没有得到tools反馈的结果时，不要编造结果，你可以说“好的，让我来xxx，请稍等片刻，（或者类似的语句，不要和我给的例子一模一样，要更加自然）”
+
+告诉用户，你将会在决定做什么之后得到这个行动的结果，你的所有行动都要符合实时对话风格。
+你回复的内容结尾不要带有“有啥想法也可以随时跟我说哦。”以及类似的内容。
+'''
                 # 创建用户消息
                 user_message = {
                     "role": "user",
                     "content": [
+                        {"type": "text", "text": tool_prompt},
                         {
                             "type": "input_audio",
                             "input_audio": {

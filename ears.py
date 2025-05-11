@@ -73,10 +73,10 @@ class Ears(ProcessorBase):
             
             try:
                 self.stream = self.p.open(
-                        format=AUDIO_FORMAT,
-                        channels=CHANNELS,
-                        rate=RATE,
-                        input=True,
+                    format=AUDIO_FORMAT,
+                    channels=CHANNELS,
+                    rate=RATE,
+                    input=True,
                     frames_per_buffer=CHUNK,
                     stream_callback=self._audio_callback
                 )
@@ -92,8 +92,8 @@ class Ears(ProcessorBase):
                 self.speech_start_time = None
                 self.speech_detected_event.clear()
                 self.speech_ended_event.clear()
-            
-            # 重置VAD状态
+        
+                # 重置VAD状态
                 self.state = np.zeros((2, 1, 128), dtype=np.float32)
                 
                 return True
@@ -207,15 +207,14 @@ class Ears(ProcessorBase):
             
                 # 发送语音结束事件
                 self.speech_ended_event.set()
-                                
-                # 直接发送到AI处理器
+                
+                # 直接发送到AI处理器 (使用DATA帧代替SYSTEM帧)
                 try:
                     self.send_downstream(Frame(
-                        FrameType.SYSTEM,
+                        FrameType.DATA,
                         {
-                            "event": "speech_ready", 
-                            "audio_base64": audio_base64,
-                            "speech_frames": self.speech_frames
+                            "type": "audio_data", 
+                            "audio_base64": audio_base64
                         }
                     ))
                     print(f"[Ears] 语音数据已发送到AI处理器，帧数: {len(self.speech_frames)}")

@@ -286,7 +286,7 @@ class Mouth(ProcessorBase):
                         last_check_time = current_time
                         if self.should_stop and not self.smooth_interrupt:
                             break
-                
+                    
                 except Exception as e:
                     print(f"[Mouth] 音频处理循环出错: {e}")
                     break
@@ -363,7 +363,7 @@ class Mouth(ProcessorBase):
                     self.stream.stop_stream()
                     self.stream.close()
                     self.stream = None
-                
+        
                     # 设置事件
                     self.buffer_empty.set()
                     self.playback_finished.set()
@@ -381,7 +381,6 @@ class Mouth(ProcessorBase):
                     
                     print("[Mouth] 音频流已完全关闭")
                     return True
-                    
                 except Exception as e:
                     print(f"[Mouth] 关闭音频流时出错: {e}")
                     # 出错时也重置关键状态
@@ -419,4 +418,4 @@ class Mouth(ProcessorBase):
             try:
                 self.p.terminate()
             except Exception as e:
-                print(f"[Mouth] 终止PyAudio时出错: {e}")
+                print(f"[Mouth] 终止PyAudio时出错: {e}") 

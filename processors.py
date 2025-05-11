@@ -36,6 +36,11 @@ class AIProcessor(ProcessorBase):
         
         # 状态标志
         self.is_generating = False
+        
+        # 跟踪API请求
+        self.current_request_id = None
+        self.completed_request_ids = set()  # 存储已完成或已打断的请求ID
+        self.request_id_lock = threading.RLock()
     
     def process_frame(self, frame):
         """处理帧"""
@@ -157,6 +162,13 @@ class AIProcessor(ProcessorBase):
         """中断当前响应"""
         with self.response_lock:
             self.is_generating = False
+            
+            # 将当前请求ID添加到完成集合中
+            with self.request_id_lock:
+                if self.current_request_id:
+                    print(f"[AIProcessor] 将请求ID {self.current_request_id} 标记为已打断")
+                    self.completed_request_ids.add(self.current_request_id)
+            
             # 调用处理器会自动处理后续的清理工作
             self.send_downstream(Frame(
                 FrameType.SYSTEM,
@@ -191,6 +203,10 @@ class AIProcessor(ProcessorBase):
                     stream_options={"include_usage": True},
                 )
                 print("[AIProcessor] API请求创建成功，开始处理响应流")
+                
+                # 获取并保存请求ID
+                request_id = None
+                
             except Exception as e:
                 print(f"[AIProcessor] API请求创建失败: {str(e)}")
                 raise
@@ -199,9 +215,29 @@ class AIProcessor(ProcessorBase):
             chunk_count = 0
             for chunk in completion:
                 chunk_count += 1
+                
+                # 获取请求ID (通常在第一个chunk中)
+                if chunk_count == 1 and hasattr(chunk, "id"):
+                    request_id = chunk.id
+                    with self.request_id_lock:
+                        self.current_request_id = request_id
+                        print(f"[AIProcessor] 获取到请求ID: {request_id}")
+                
+                # 检查请求是否已被标记为完成/打断
+                with self.request_id_lock:
+                    if request_id and request_id in self.completed_request_ids:
+                        print(f"[AIProcessor] 请求ID {request_id} 已被标记为完成/打断，停止处理")
+                        response_data["interrupted"] = True
+                        break
+                
                 # 检查是否应该继续处理
                 if not self.is_generating or (self.context and self.context.is_cancelled()):
                     response_data["interrupted"] = True
+                    # 将当前请求ID添加到完成集合
+                    with self.request_id_lock:
+                        if request_id:
+                            self.completed_request_ids.add(request_id)
+                            print(f"[AIProcessor] 请求ID {request_id} 已被标记为中断")
                     print("[AIProcessor] 响应被中断")
                     break
                     
@@ -224,6 +260,12 @@ class AIProcessor(ProcessorBase):
                                 print(f"[AIProcessor] 收到转写文本: {transcript}")
                         
                         if "data" in delta.audio:
+                            # 再次检查请求是否已被标记为完成/打断
+                            with self.request_id_lock:
+                                if request_id and request_id in self.completed_request_ids:
+                                    print(f"[AIProcessor] 请求ID {request_id} 已被标记为完成/打断，停止处理音频")
+                                    break
+                            
                             # 再次检查是否应该继续处理
                             if not self.is_generating or (self.context and self.context.is_cancelled()):
                                 break
@@ -252,6 +294,12 @@ class AIProcessor(ProcessorBase):
                                 print(f"[AIProcessor] 发送音频数据到输出处理器失败: {e}")
             
             print(f"[AIProcessor] 共处理了 {chunk_count} 个响应块")
+            
+            # 将当前请求ID添加到完成集合
+            with self.request_id_lock:
+                if request_id:
+                    self.completed_request_ids.add(request_id)
+                    print(f"[AIProcessor] 请求ID {request_id} 已被标记为完成")
             
             # 如果处理完成且未中断，添加到消息历史
             if not response_data["interrupted"]:
@@ -295,8 +343,16 @@ class AIProcessor(ProcessorBase):
             # 重置状态
             with self.response_lock:
                 self.is_generating = False
+                self.current_request_id = None
                 self.response_thread = None
                 print("[AIProcessor] 响应线程已结束，状态已重置")
+            
+            # 定期清理已完成请求ID集合，防止无限增长
+            with self.request_id_lock:
+                if len(self.completed_request_ids) > 100:  # 设置一个合理的阈值
+                    print(f"[AIProcessor] 清理已完成请求ID集合，当前大小: {len(self.completed_request_ids)}")
+                    # 只保留最近的50个
+                    self.completed_request_ids = set(list(self.completed_request_ids)[-50:])
 
 class EventProcessor(ProcessorBase):
     """事件处理器 - 负责处理系统事件并更新状态"""
